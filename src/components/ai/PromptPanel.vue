@@ -20,14 +20,23 @@
         <!-- User message -->
         <div class="message user">
           <div class="message-role">我</div>
-          <div class="message-content" v-html="renderContent(pair.userMsg)"></div>
+          <div
+            class="message-content"
+            v-html="renderContent(pair.userMsg)"
+          ></div>
         </div>
 
         <!-- Assistant message -->
         <div v-if="pair.assistantMsg" class="message assistant">
           <div class="message-role">AI</div>
-          <div class="message-content" v-html="renderContent(pair.assistantMsg)"></div>
-          <div v-if="hasCode(pair.assistantMsg)" class="message-actions">
+          <div
+            class="message-content"
+            v-html="renderContent(pair.assistantMsg)"
+          ></div>
+          <div
+            v-if="allowSubmit && hasCode(pair.assistantMsg)"
+            class="message-actions"
+          >
             <n-button
               size="tiny"
               :disabled="pair.assistantMsg.submitted"
@@ -128,6 +137,8 @@ import {
 import { Prompt, Submission } from "../../api"
 import { renderMarkdown } from "../../utils/markdown"
 
+const { allowSubmit = true } = defineProps<{ allowSubmit?: boolean }>()
+
 const emit = defineEmits<{ deleted: []; submitted: [] }>()
 
 const input = ref("")
@@ -160,7 +171,8 @@ const pairs = computed(() => {
   let i = 0
   while (i < msgs.length) {
     if (msgs[i].role === "user") {
-      const assistantMsg = msgs[i + 1]?.role === "assistant" ? msgs[i + 1] : null
+      const assistantMsg =
+        msgs[i + 1]?.role === "assistant" ? msgs[i + 1] : null
       result.push({ userMsg: msgs[i], assistantMsg, index: i })
       i += assistantMsg ? 2 : 1
     } else {
@@ -294,7 +306,6 @@ watch([() => messages.value.length, streamingContent], () => {
   margin-top: 6px;
 }
 
-
 @keyframes pulse {
   0%,
   100% {
@@ -374,7 +385,9 @@ watch([() => messages.value.length, streamingContent], () => {
   cursor: pointer;
   color: #bbb;
   line-height: 1;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .pair-delete-btn:hover {

@@ -21,6 +21,9 @@ import type {
   ShowcaseDetail,
   PromptRound,
   RandomRatingItem,
+  CreationSlim,
+  CreationDetail,
+  CreationIn,
 } from "./utils/type"
 import { BASE_URL, STORAGE_KEY } from "./utils/const"
 
@@ -160,6 +163,41 @@ export const Challenge = {
 
   async listDisplay() {
     const res = await http.get("/challenge/display")
+    return res.data
+  },
+}
+
+export const Creation = {
+  async listMine(): Promise<CreationSlim[]> {
+    const res = await http.get("/creation/mine")
+    return res.data
+  },
+
+  async create(payload: CreationIn): Promise<CreationDetail> {
+    const res = await http.post("/creation/", payload)
+    return res.data
+  },
+
+  async get(display: number): Promise<CreationDetail> {
+    const res = await http.get(`/creation/${display}`)
+    return res.data
+  },
+
+  async update(display: number, payload: CreationIn): Promise<CreationDetail> {
+    const res = await http.put(`/creation/${display}`, payload)
+    return res.data
+  },
+
+  async saveCode(
+    display: number,
+    code: { html: string; css: string; js: string },
+  ): Promise<CreationDetail> {
+    const res = await http.put(`/creation/${display}/code`, code)
+    return res.data
+  },
+
+  async remove(display: number) {
+    const res = await http.delete(`/creation/${display}`)
     return res.data
   },
 }

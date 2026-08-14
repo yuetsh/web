@@ -7,9 +7,24 @@ import { authed } from "./store/user"
 
 const routes = [
   { path: "/", name: "home", component: Workspace, meta: { auth: true } },
-  { path: "/tutorial", name: "home-tutorial-list", component: Workspace, meta: { auth: true } },
-  { path: "/tutorial/:display", name: "home-tutorial", component: Workspace, meta: { auth: true } },
-  { path: "/challenge", name: "home-challenge-list", component: Workspace, meta: { auth: true } },
+  {
+    path: "/tutorial",
+    name: "home-tutorial-list",
+    component: Workspace,
+    meta: { auth: true },
+  },
+  {
+    path: "/tutorial/:display",
+    name: "home-tutorial",
+    component: Workspace,
+    meta: { auth: true },
+  },
+  {
+    path: "/challenge",
+    name: "home-challenge-list",
+    component: Workspace,
+    meta: { auth: true },
+  },
   {
     path: "/challenge/:display",
     name: "home-challenge",
@@ -27,6 +42,18 @@ const routes = [
     name: "submission",
     component: () => import("./pages/Submission.vue"),
     props: true,
+    meta: { auth: true },
+  },
+  {
+    path: "/creation",
+    name: "creation-list",
+    component: () => import("./pages/CreationHome.vue"),
+    meta: { auth: true },
+  },
+  {
+    path: "/creation/:display",
+    name: "creation",
+    component: () => import("./pages/CreationDetail.vue"),
     meta: { auth: true },
   },
   {

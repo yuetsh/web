@@ -59,6 +59,14 @@
         </n-tooltip>
         <n-tooltip v-if="authed" trigger="hover">
           <template #trigger>
+            <n-button text @click="$router.push({ name: 'creation-list' })">
+              <Icon :width="16" icon="lucide:sparkles"></Icon>
+            </n-button>
+          </template>
+          自由创作
+        </n-tooltip>
+        <n-tooltip v-if="authed" trigger="hover">
+          <template #trigger>
             <n-button text @click="$router.push({ name: 'showcase' })">
               <Icon :width="16" icon="lucide:award"></Icon>
             </n-button>

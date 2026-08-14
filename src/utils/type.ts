@@ -96,6 +96,28 @@ export interface ChallengeIn {
   example_js?: string | null
 }
 
+export interface CreationSlim {
+  display: number
+  title: string
+  content: string
+  created: string
+  modified: string
+  has_code: boolean
+}
+
+export interface CreationDetail extends CreationSlim {
+  task_id: number
+  html: string
+  css: string
+  js: string
+  owner_name: string
+}
+
+export interface CreationIn {
+  title: string
+  content: string
+}
+
 export interface User {
   id: number
   username: string
