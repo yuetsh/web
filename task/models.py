@@ -6,6 +6,7 @@ from django_extensions.db.models import TimeStampedModel
 class TaskTypeChoices(models.TextChoices):
     CHALLENGE = "challenge", "挑战"
     TUTORIAL = "tutorial", "教程"
+    CREATION = "creation", "创作"
 
 
 class Task(TimeStampedModel):
@@ -64,6 +65,44 @@ class Challenge(Task):
     class Meta:
         ordering = ("display",)
         verbose_name = "挑战"
+        verbose_name_plural = verbose_name
+
+
+class Creation(Task):
+    """
+    用户自己创建的主题：标题和内容都由用户自己写，只有创作者本人能看到和修改
+    """
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="creations",
+        verbose_name="创作者",
+    )
+    html = models.TextField(blank=True, default="", verbose_name="HTML代码")
+    css = models.TextField(blank=True, default="", verbose_name="CSS代码")
+    js = models.TextField(blank=True, default="", verbose_name="JS代码")
+
+    @property
+    def owner_name(self):
+        return self.owner.username if self.owner_id else ""
+
+    def save(self, *args, **kwargs):
+        if not self.display:
+            last = (
+                Creation.objects.order_by("-display")
+                .values_list("display", flat=True)
+                .first()
+            )
+            self.display = (last or 0) + 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        ordering = ("-created",)
+        verbose_name = "创作"
         verbose_name_plural = verbose_name
 
 

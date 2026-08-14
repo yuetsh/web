@@ -2,7 +2,7 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Message
-from .utils import get_or_create_active_conversation
+from .utils import can_access_task, get_or_create_active_conversation
 from .llm import stream_chat, extract_code, stream_guidance, parse_guidance_response
 
 
@@ -14,6 +14,10 @@ class PromptConsumer(AsyncWebsocketConsumer):
             return
 
         self.task_id = int(self.scope["url_route"]["kwargs"]["task_id"])
+        if not await self.check_access():
+            await self.close()
+            return
+
         self.current_user_message = None
         await self.accept()
 
@@ -78,6 +82,10 @@ class PromptConsumer(AsyncWebsocketConsumer):
                 self.current_user_message = None
 
     @database_sync_to_async
+    def check_access(self):
+        return can_access_task(self.user, self.task_id)
+
+    @database_sync_to_async
     def get_or_create_conversation(self):
         return get_or_create_active_conversation(self.user, self.task_id)
 
@@ -129,6 +137,10 @@ class GuidanceConsumer(AsyncWebsocketConsumer):
             return
 
         self.task_id = int(self.scope["url_route"]["kwargs"]["task_id"])
+        if not await self.check_access():
+            await self.close()
+            return
+
         self.current_user_message = None
         self.session_messages = []
         await self.accept()
@@ -184,6 +196,10 @@ class GuidanceConsumer(AsyncWebsocketConsumer):
             if self.current_user_message:
                 await self.delete_message(self.current_user_message)
                 self.current_user_message = None
+
+    @database_sync_to_async
+    def check_access(self):
+        return can_access_task(self.user, self.task_id)
 
     @database_sync_to_async
     def get_or_create_conversation(self):

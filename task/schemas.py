@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from ninja import Schema, ModelSchema
 from .models import Tutorial, Challenge
@@ -55,3 +56,44 @@ class ChallengeIn(Schema):
     example_html: Optional[str] = None
     example_css: Optional[str] = None
     example_js: Optional[str] = None
+
+
+class CreationSlim(Schema):
+    display: int
+    title: str
+    content: str
+    created: datetime
+    modified: datetime
+    has_code: bool
+
+    @staticmethod
+    def resolve_has_code(obj):
+        return bool(obj.html or obj.css or obj.js)
+
+
+class CreationOut(Schema):
+    task_id: int
+    display: int
+    title: str
+    content: str
+    html: str
+    css: str
+    js: str
+    owner_name: str
+    created: datetime
+    modified: datetime
+
+    @staticmethod
+    def resolve_task_id(obj):
+        return obj.pk
+
+
+class CreationIn(Schema):
+    title: str
+    content: str = ""
+
+
+class CreationCodeIn(Schema):
+    html: str = ""
+    css: str = ""
+    js: str = ""

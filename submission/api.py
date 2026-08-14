@@ -56,7 +56,7 @@ from .schemas import (
 
 from .models import Award, ItemOrdering, Rating, Submission, SubmissionAward
 from .gradebook import GradebookFilters, build_gradebook, gradebook_csv_rows
-from task.models import Task
+from task.models import Task, TaskTypeChoices
 from account.models import RoleChoices, User
 
 router = Router()
@@ -132,6 +132,8 @@ def create_submission(request, payload: SubmissionIn):
     创建一个新的提交
     """
     task = get_object_or_404(Task, id=payload.task_id)
+    if task.task_type == TaskTypeChoices.CREATION:
+        raise HttpError(400, "自由创作不需要提交")
 
     manual_asst_msg = None
     linked_msg = None

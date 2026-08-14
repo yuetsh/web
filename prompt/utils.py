@@ -2,6 +2,19 @@ from django.db.models import Count, Q
 from .models import Conversation
 
 
+def can_access_task(user, task_id):
+    """自由创作只有创作者本人（和超管）能对话，其他任务对所有登录用户开放。"""
+    from account.models import RoleChoices
+    from task.models import Creation
+
+    owner_id = (
+        Creation.objects.filter(pk=task_id).values_list("owner_id", flat=True).first()
+    )
+    if owner_id is None:
+        return True
+    return owner_id == user.id or user.role == RoleChoices.SUPER
+
+
 def get_active_conversation(user, task_id):
     """Return the conversation with the most messages for this user+task, or None."""
     return (
