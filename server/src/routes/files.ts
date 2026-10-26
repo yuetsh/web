@@ -96,15 +96,12 @@ for (const kind of ["challenge", "tutorial"] as const) {
       `tasks/${task.task_type}/${task.display}/${validFilename(name)}`,
       file,
     )
-    if (existing) {
-      run(`UPDATE task_taskasset SET file = $file WHERE id = $id`, { file: stored, id: existing.id })
-    } else {
-      run(`INSERT INTO task_taskasset (name, file, task_id) VALUES ($name, $file, $task_id)`, {
-        name,
-        file: stored,
-        task_id: task.id,
-      })
-    }
+    // 上面 await 期间可能有同名上传先写入了，用 upsert 而不是按 existing 选 INSERT / UPDATE
+    run(
+      `INSERT INTO task_taskasset (name, file, task_id) VALUES ($name, $file, $task_id)
+       ON CONFLICT (task_id, name) DO UPDATE SET file = excluded.file`,
+      { name, file: stored, task_id: task.id },
+    )
     return c.json(assetOut({ name, file: stored }))
   })
 

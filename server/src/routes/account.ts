@@ -30,12 +30,15 @@ async function insertUser(u: {
   classname?: string
   email?: string
 }) {
+  // 先算哈希（异步），再同步地查重 + 插入：中间没有 await，并发注册同名不会撞唯一约束变成 500
+  const password = await makePassword(u.password)
+  if (userExists(u.username)) throw new HttpError(400, "用户已存在")
   const res = run(
     `INSERT INTO account_user
        (password, last_login, is_superuser, username, email, is_staff, is_active, date_joined, role, raw_password, classname)
      VALUES ($password, NULL, 0, $username, $email, 0, 1, $now, $role, $raw, $classname)`,
     {
-      password: await makePassword(u.password),
+      password,
       username: u.username,
       email: u.email ?? "",
       now: now(),
@@ -59,7 +62,6 @@ router.post("/register", async (c) => {
       password: z.string().min(6).max(20),
     }),
   )
-  if (userExists(payload.username)) throw new HttpError(400, "用户已存在")
   await insertUser(payload)
   return c.json({ message: "创建成功" })
 })
@@ -148,6 +150,8 @@ router.post("/batch", async (c) => {
   )
   const ts = now()
   tx(() => {
+    // 算哈希期间可能有人建了同名用户，插入前在同一个同步事务里再查一次
+    if (usernames.some(userExists)) throw new HttpError(400, "有些用户已经存在，创建失败")
     for (const u of users) {
       run(
         `INSERT INTO account_user
@@ -172,7 +176,6 @@ router.post("/create", async (c) => {
       classname: z.string().trim().max(50).default(""),
     }),
   )
-  if (userExists(payload.username)) throw new HttpError(400, "用户已存在")
   const id = await insertUser(payload)
   return c.json({ id, message: "创建成功" })
 })

@@ -5,6 +5,7 @@
 /media/
 /redis/
 /sqlite/
+/db.sqlite3*
 
 # 本地工具目录
 .agents/
