@@ -15,3 +15,6 @@
 
 node_modules/
 .DS_Store
+
+# 旧 Django 后端在本地留下的文件（虚拟环境、旧 worktree 等）
+/api/

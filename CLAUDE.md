@@ -4,65 +4,71 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-WebPreview is a web-based tutorial/challenge platform where users view tutorials and submit HTML/CSS/JS code for challenges. It has a Django API backend and a Vue 3 frontend, deployed via Docker Compose with Caddy as reverse proxy.
+WebPreview is a web-based tutorial/challenge platform where users view tutorials and submit HTML/CSS/JS code for challenges. It has a Bun backend (`server/`) and a Vue 3 frontend (`client/`) in one repository, deployed via Docker Compose with Caddy as reverse proxy.
+
+The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1–2 GB). It keeps Django's exact database schema (table names, column types, UTC `YYYY-MM-DD HH:MM:SS.ffffff` timestamps, 32-char hex UUIDs, `pbkdf2_sha256$...` password hashes) so old data loads unchanged. The Django code is in git history before that change.
 
 ## Architecture
 
-- **`api/`** — Django backend using **django-ninja** for REST APIs and **Django Channels** (Daphne/ASGI) for WebSocket support
-  - `api/api/` — Django project config (settings, urls, asgi)
-  - `api/account/` — User auth (login/logout, profiles, batch creation). Three roles: `super`, `admin`, `normal` — affects scoring weights
-  - `api/task/` — Tutorial and Challenge models (single `Task` base model with `task_type`), with separate `tutorial.py` and `challenge.py` router files
-  - `api/submission/` — Code submission + `Rating` model. Submission score is a weighted average of ratings by role: super×0.5, admin×0.3, normal×0.2. `Profile.recalculate_total_score()` uses best-score-per-challenge
-  - `api/prompt/` — LLM chat feature: WebSocket consumer streams DeepSeek responses, `Conversation`/`Message` models store history, code blocks extracted from responses
-  - `api/utils/upload.py` — Image upload endpoint
-  - API routers are registered in `api/api/urls.py` under `/api/` prefix
-  - Uses `AUTH_USER_MODEL = "account.User"` (custom user model)
-  - Dev mode uses SQLite (`ENV != "production"`); production uses PostgreSQL + Redis (sessions, caching, channel layers)
+- **`server/`** — Bun + **Hono** HTTP API, Bun's native WebSocket, **`bun:sqlite`** (single SQLite file, WAL). No Redis, no Postgres.
+  - `src/index.ts` — `Bun.serve`: WebSocket upgrades go to `ws.ts`, everything else to the Hono app
+  - `src/app.ts` — mounts routers under `/api/<prefix>`, CORS, Origin check on writes, session middleware, error → `{ detail }` JSON (ninja-compatible; validation errors are 422)
+  - `src/db.ts` — schema (`CREATE TABLE IF NOT EXISTS`, same DDL as Django), `all/get/run/tx` helpers using `$name` params, time (`now()`, `iso()`) and UUID (`uuidHex()`, `uuidOut()`) conversions
+  - `src/auth.ts` — Django-compatible password hashing, sessions in table `auth_session` (cookie `sessionid`), `requireUser/requireAdmin/requireSuper` (401 / 403)
+  - `src/routes/` — `account`, `tasks` (tutorial / challenge / creation), `files` (task assets + image upload), `submission`, `showcase` (mounted under `/submission/showcase`), `prompt`
+  - `src/services/` — `score.ts` (rating weights super×0.5, admin×0.3, normal×0.2, then Bayesian smoothing with C=3 and zones), `gradebook.ts`, `llm.ts` (OpenAI-compatible streaming via fetch; DeepSeek default, ARK for doubao models), `classifier.ts` (Bloom-level L1–L6 prompt tagging, runs in background), `cascade.ts` (Django's CASCADE deletes, done by hand), `pyround.ts` (`pyRound`/`pySum` reproduce Python's `round()` and `sum()` so scores match the old system bit-for-bit)
+  - `src/ws.ts` — `/ws/prompt/<task_id>/` (code generation chat) and `/ws/guidance/<task_id>/` (prompt coaching); messages per connection are processed serially; on disconnect the pending user message is deleted and the LLM request aborted
+  - `scripts/` — one-off CLIs: `migrate-from-postgres.ts`, `create-superuser.ts`, `classify-prompts.ts`, `recalculate-scores.ts`
+  - Roles: `super`, `admin`, `normal`. Task model is multi-table: `task_task` + one of `task_tutorial` / `task_challenge` / `task_creation` (`task_ptr_id`)
 
 - **`client/`** — Vue 3 + TypeScript SPA built with **Rsbuild**
   - UI framework: **Naive UI** (auto-imported via `unplugin-vue-components`)
-  - `src/api.ts` — Axios-based API client with CSRF and auth interceptors; exports `Account`, `Tutorial`, `Challenge`, `Submission`, `Prompt`, `Helper` objects
-  - `src/router.ts` — Vue Router with auth guards; routes under `/dashboard` require login
-  - `src/store/` — Reactive state (plain Vue refs, not Vuex/Pinia)
-  - `src/pages/` — Route-level views (Home, Dashboard, ChallengeHome, TutorialEditor, ChallengeEditor, Submissions, Leaderboard, MyScores)
-  - `src/components/` — Shared components: `Task.vue`, `Tutorial.vue`, `Challenge.vue`, `Editors.vue` (CodeMirror), `Preview.vue` (live HTML preview), `Toolbar.vue`, `PromptPanel.vue` (LLM chat)
+  - `src/api.ts` — Axios-based API client; 401 clears login and goes home, 403 alerts and goes home
+  - `src/router.ts` — Vue Router with auth guards
+  - `src/store/` — Reactive state (plain Vue refs, not Vuex/Pinia); `prompt.ts` / `guidance.ts` own the WebSockets
+  - `src/pages/`, `src/components/` — user management uses `components/dashboard/UserFormModal.vue` (there is no Django Admin anymore)
 
-- **`Caddyfile`** — Routes `/api*`, `/admin*`, `/ws*` to backend; serves SPA and static/media files
-- **`docker-compose.yaml`** — Services: caddy, api, postgres, redis
+- **`Caddyfile`** — serves SPA from `build/` and `/media`, proxies `/api*` and `/ws*` to the backend
+- **`docker-compose.yaml`** — `webpreview-web` (Caddy) and `webpreview-api` (Bun); `webpreview-db` (Postgres) exists only under the `migrate` profile for the one-time data migration
+- **`.github/workflows/deploy.yaml`** — on push to `main`: build client, rsync to server `build/`, then `git pull && docker compose up -d --build` on the server
 
 ## Development Commands
 
+```bash
+./dev.sh                 # backend (bun --watch) + frontend together
+```
+
+### Server (from `server/`)
+```bash
+bun run dev              # dev server on :8000 with auto-reload
+bun test                 # API + unit tests (in-memory SQLite, LLM disabled)
+bun run typecheck
+bun scripts/create-superuser.ts <username> <password>
+bun scripts/classify-prompts.ts [--task-id N] [--force] [--dry-run]
+bun scripts/recalculate-scores.ts [--dry-run]
+```
+Config comes from `server/.env` (see `server/.env.example`); dev DB is `server/data/db.sqlite3`, uploads go to the repo-root `media/`.
+
 ### Client (from `client/`)
 ```bash
-npm run start        # Dev server (Rsbuild)
+npm run start        # Dev server (Rsbuild) on :3000
 npm run build        # Production build
 npm run fmt          # Format with Prettier
 ```
-
-Frontend env vars used at build time: `PUBLIC_BASE_URL`, `PUBLIC_ADMIN_URL`, `PUBLIC_WS_URL`.
-
-### API (from `api/`)
-```bash
-uv run manage.py runserver    # Dev server
-uv run manage.py migrate      # Run migrations
-uv run manage.py createsuperuser  # Create admin user
-```
-Uses `uv` for Python dependency management (`pyproject.toml` + `uv.lock`). Set `ENV=dev` in `.env` (default) for SQLite.
+Frontend env vars used at build time: `PUBLIC_BASE_URL`, `PUBLIC_WS_URL`, `PUBLIC_WEB_URL` (dev proxy target for `/media` and `/ws`).
 
 ### Docker (from project root)
 ```bash
-docker compose up -d          # Start all services
-docker compose up -d --build  # Rebuild and start
+docker compose up -d --build
+docker compose run --rm webpreview-api bun scripts/create-superuser.ts <username> <password>
 ```
 
 ## Key Technical Details
 
-- **Backend API pattern**: each Django app has `api.py` (or named router files like `task/tutorial.py`, `task/challenge.py`) with django-ninja routers, plus `schemas.py` for Pydantic models. Routers mount under `/api/<prefix>/`
-- **WebSocket**: `prompt/consumers.py` handles LLM chat at `ws://<host>/ws/prompt/<task_id>/`. Django Channels is configured; in dev, channel layer is in-memory (no Redis needed)
-- **LLM config**: `LLM_API_KEY`, `LLM_BASE_URL` (default: DeepSeek), `LLM_MODEL` set via `.env`
-- **Task `display` field**: integer used as URL slug for tutorials/challenges (unique per task type), not the DB `id`
-- **Submission IDs**: UUIDs (not integers)
-- Frontend dev server proxies `/media` to `PUBLIC_WEB_URL` env var; API calls go to `BASE_URL` defined in `src/utils/const.ts`
-- Environment config via `.env` file in `api/` (referenced by docker-compose and Django's `python-dotenv`)
-- Language/locale is Chinese (`zh-hans`, `Asia/Shanghai` timezone)
-- Client build output goes to `build/` directory, served by Caddy in production
+- **Schema changes**: there is no migration framework. Edit the DDL in `src/db.ts` for new tables; for altering existing tables add an idempotent step guarded by `PRAGMA user_version`
+- **SQL style**: raw SQL with named params (`$id`), `strict: true` so params are passed without the `$` prefix (`{ id }`). Wrap multi-statement writes in `tx()`. Deleting tasks/submissions must go through `services/cascade.ts`
+- **API compatibility**: response shapes, status codes and trailing-slash tolerance (`strict: false`) mirror the old django-ninja API, so the client needed no changes besides user management. Paginated endpoints take `page` / `page_size` (default 10, max 100) and return `{ items, count }`
+- **Task `display` field**: integer used as URL slug for tutorials/challenges/creations (unique per task type), not the DB `id`
+- **Submission / conversation IDs**: UUIDs in the API, 32-char hex in the DB
+- Language/locale is Chinese; timestamps are stored in UTC and returned as ISO strings ending in `Z`
+- Client build output is served by Caddy from `build/` in production

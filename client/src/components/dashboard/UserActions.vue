@@ -19,13 +19,19 @@
     >
       解封
     </n-button>
+    <UserFormModal
+      v-model:show="showEdit"
+      :user="user"
+      @saved="emits('reload')"
+    />
   </n-flex>
 </template>
 <script lang="ts" setup>
+import { ref } from "vue"
 import { useMessage } from "naive-ui"
 import { Account } from "../../api"
-import { ADMIN_URL } from "../../utils/const"
 import { Role, type User } from "../../utils/type"
+import UserFormModal from "./UserFormModal.vue"
 
 interface Props {
   user: User
@@ -35,9 +41,10 @@ const props = defineProps<Props>()
 const emits = defineEmits(["reload"])
 
 const message = useMessage()
+const showEdit = ref(false)
 
 function edit() {
-  window.open(`${ADMIN_URL}/account/user/${props.user.id}/change/`)
+  showEdit.value = true
 }
 
 async function toggleUserActive() {

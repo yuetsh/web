@@ -2,9 +2,9 @@
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
-# 启动后端
-cd "$ROOT/api" || exit 1
-uv run manage.py runserver &
+# 启动后端（--watch：改代码自动重启）
+cd "$ROOT/server" || exit 1
+bun --watch run src/index.ts &
 BACKEND_PID=$!
 
 # 启动前端

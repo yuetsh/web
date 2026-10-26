@@ -35,8 +35,6 @@ export const STORAGE_KEY = {
   FONTSIZE: "web-fontsize",
 }
 
-export const ADMIN_URL = import.meta.env.PUBLIC_ADMIN_URL
-
 export const BASE_URL = import.meta.env.PUBLIC_BASE_URL
 
 export const WS_BASE_URL =

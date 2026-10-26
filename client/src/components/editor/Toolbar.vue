@@ -29,20 +29,13 @@
 <script lang="ts" setup>
 import { computed, h } from "vue"
 import { Icon } from "@iconify/vue"
-import {
-  authed,
-  roleAdmin,
-  roleNormal,
-  roleSuper,
-  user,
-} from "../../store/user"
+import { authed, roleAdmin, roleNormal, user } from "../../store/user"
 import { loginModal } from "../../store/modal"
 import { show, panelSize } from "../../store/panel"
 import { taskId } from "../../store/task"
 import { Account } from "../../api"
 import { Role } from "../../utils/type"
 import { router } from "../../router"
-import { ADMIN_URL } from "../../utils/const"
 
 const props = defineProps<{
   submitLoading: boolean
@@ -61,16 +54,6 @@ const menu = computed(() => [
     icon: () =>
       h(Icon, {
         icon: "streamline-emojis:robot-face-1",
-        width: 20,
-      }),
-  },
-  {
-    label: "数据管理",
-    key: "admin",
-    show: roleSuper.value,
-    icon: () =>
-      h(Icon, {
-        icon: "skill-icons:django",
         width: 20,
       }),
   },
@@ -106,9 +89,6 @@ function clickMenu(name: string) {
       router.push({ name: route, params: { display: 0 } })
       break
     }
-    case "admin":
-      window.open(ADMIN_URL)
-      break
     case "submissions":
       router.push({
         name: "submissions",

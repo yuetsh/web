@@ -17,7 +17,11 @@
         >
           <template #header>
             <n-flex align="center">
-              <n-button text @click.stop="togglePublic(item.display)">
+              <n-button
+                text
+                :disabled="!roleSuper"
+                @click.stop="togglePublic(item.display)"
+              >
                 <Icon
                   width="24"
                   :icon="
@@ -29,7 +33,9 @@
               </n-button>
               <span>【{{ item.display }}】{{ item.title }}</span>
               <n-tag size="small" type="warning">{{ item.score }}分</n-tag>
-              <n-tag size="small">出题人 {{ item.author_name || "未设置" }}</n-tag>
+              <n-tag size="small"
+                >出题人 {{ item.author_name || "未设置" }}</n-tag
+              >
             </n-flex>
           </template>
           <template #header-extra>
@@ -111,9 +117,15 @@
       :autosize="{ minRows: 10, maxRows: 30 }"
     />
     <n-flex v-if="splitResult" style="margin-top: 8px">
-      <n-tag size="small" type="success">HTML · {{ splitResult.html.length }} 字符</n-tag>
-      <n-tag size="small" type="info">CSS · {{ splitResult.css.length }} 字符</n-tag>
-      <n-tag size="small" type="warning">JS · {{ splitResult.js.length }} 字符</n-tag>
+      <n-tag size="small" type="success"
+        >HTML · {{ splitResult.html.length }} 字符</n-tag
+      >
+      <n-tag size="small" type="info"
+        >CSS · {{ splitResult.css.length }} 字符</n-tag
+      >
+      <n-tag size="small" type="warning"
+        >JS · {{ splitResult.js.length }} 字符</n-tag
+      >
     </n-flex>
   </n-modal>
 </template>
@@ -122,6 +134,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { Icon } from "@iconify/vue"
 import { Challenge } from "../api"
+import { roleSuper } from "../store/user"
 import type { ChallengeSlim } from "../utils/type"
 import { useDialog, useMessage } from "naive-ui"
 import MarkdownEditor from "../components/dashboard/MarkdownEditor.vue"
@@ -177,9 +190,11 @@ watch(rawCode, (val) => {
 watch(showExampleModal, (visible) => {
   if (!visible) return
   const parts: string[] = []
-  if (challenge.example_css) parts.push(`<style>\n${challenge.example_css}\n</style>`)
+  if (challenge.example_css)
+    parts.push(`<style>\n${challenge.example_css}\n</style>`)
   if (challenge.example_html) parts.push(challenge.example_html)
-  if (challenge.example_js) parts.push(`<script>\n${challenge.example_js}\n<\/script>`)
+  if (challenge.example_js)
+    parts.push(`<script>\n${challenge.example_js}\n<\/script>`)
   rawCode.value = parts.join("\n\n")
 })
 const challenge = reactive({

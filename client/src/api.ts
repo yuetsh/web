@@ -82,6 +82,29 @@ export const Account = {
     return res.data
   },
 
+  async create(payload: {
+    username: string
+    password: string
+    role: string
+    classname: string
+  }) {
+    const res = await http.post("/account/create", payload)
+    return res.data
+  },
+
+  async update(
+    id: number,
+    payload: {
+      username?: string
+      password?: string
+      role?: string
+      classname?: string
+    },
+  ) {
+    const res = await http.put(`/account/${id}`, payload)
+    return res.data
+  },
+
   async toggleActive(id: number) {
     const res = await http.put(`/account/active/${id}`)
     return res.data

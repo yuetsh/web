@@ -15,7 +15,7 @@
           :options="roles"
         />
       </div>
-      <n-button @click="goDjangoUserAdd">新建一个</n-button>
+      <n-button @click="showCreate = true">新建一个</n-button>
       <n-button @click="showBatch = true">批量新建</n-button>
       <n-pagination
         v-model:page="query.page"
@@ -25,6 +25,7 @@
       />
     </n-flex>
     <n-data-table striped :columns="columns" :data="users"></n-data-table>
+    <UserFormModal v-model:show="showCreate" @saved="init" />
     <n-modal
       style="width: 300px"
       :mask-closable="false"
@@ -62,8 +63,8 @@ import { Account } from "../api"
 import { parseTime } from "../utils/helper"
 import { useMessage, type DataTableColumn } from "naive-ui"
 import { getRole, Role, type User } from "../utils/type"
-import { ADMIN_URL } from "../utils/const"
 import UserActions from "../components/dashboard/UserActions.vue"
+import UserFormModal from "../components/dashboard/UserFormModal.vue"
 import { useRoute, useRouter } from "vue-router"
 import { watchDebounced } from "@vueuse/core"
 
@@ -78,6 +79,7 @@ const query = reactive({
   role: "",
 })
 const showBatch = ref(false)
+const showCreate = ref(false)
 const classname = ref("")
 const namesStr = ref("")
 const names = computed(() => namesStr.value.split("\n").filter((it) => !!it))
@@ -114,6 +116,10 @@ const columns: DataTableColumn<User>[] = [
         : "从未登录",
   },
   {
+    title: "班级",
+    key: "classname",
+  },
+  {
     title: "权限",
     key: "role",
     render: (row) => getRole(row.role),
@@ -124,10 +130,6 @@ const columns: DataTableColumn<User>[] = [
     render: (row) => h(UserActions, { user: row, onReload: init }),
   },
 ]
-
-function goDjangoUserAdd() {
-  window.open(`${ADMIN_URL}/account/user/add/`)
-}
 
 async function batchCreateUsers() {
   if (!names.value.length) return
@@ -145,7 +147,7 @@ async function batchCreateUsers() {
     init()
   } catch (err: any) {
     batchLoading.value = false
-    message.error(err.detail ?? "批量创建失败")
+    message.error(err.response?.data?.detail ?? "批量创建失败")
   }
 }
 

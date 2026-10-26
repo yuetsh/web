@@ -4,7 +4,6 @@ services:
     container_name: webpreview-web
     volumes:
       - ./build:/usr/share/caddy:ro
-      - ./api/static:/static:ro
       - ./media:/media
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     ports:
@@ -14,28 +13,24 @@ services:
     restart: unless-stopped
 
   webpreview-api:
-    build: api
+    build: server
     container_name: webpreview-api
     env_file:
       - .env
     volumes:
+      - ./sqlite:/app/data
       - ./media:/app/media
     restart: unless-stopped
-    depends_on:
-      - webpreview-db
 
+  # 只在从旧版 Postgres 迁移数据时使用：
+  #   docker compose --profile migrate up -d webpreview-db
+  #   docker compose run --rm webpreview-api bun scripts/migrate-from-postgres.ts
   webpreview-db:
     image: postgres:17-alpine
     container_name: webpreview-db
+    profiles: ["migrate"]
     volumes:
       - ./data:/var/lib/postgresql/data
     env_file:
       - .env
-    restart: unless-stopped
-
-  webpreview-redis:
-    image: redis:7-alpine
-    container_name: webpreview-redis
-    restart: unless-stopped
-    volumes:
-      - ./redis:/data
+    restart: "no"

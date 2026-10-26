@@ -124,6 +124,7 @@ export interface User {
   date_joined: Date
   last_login: Date
   role: Role
+  classname: string
   is_active: boolean
 }
 

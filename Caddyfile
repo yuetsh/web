@@ -6,21 +6,11 @@
         file_server
         try_files {path} /
     }
-   
-    
-    handle_path /django_static/* {
-        root * /static
-        file_server
-    }
 
     handle_path /media/* {
         root * /media
         file_server
     }
-
-    handle /admin* {
-		reverse_proxy webpreview-api:8000
-	}
 
     handle /api* {
         reverse_proxy webpreview-api:8000
