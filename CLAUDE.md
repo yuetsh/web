@@ -42,7 +42,7 @@ bun install              # installs both workspaces into the single root bun.loc
 bun run dev              # backend (bun --watch, :8000) + frontend (Vite, :3000) together
 bun run build            # client production build (build:staging for the school server)
 bun run test             # server tests
-bun run typecheck        # server typecheck
+bun run typecheck        # server (tsc 7) + client (vue-tsc) typecheck
 bun run fmt              # format the client
 ```
 Add a dependency from inside its workspace (`cd client && bun add x`); the lockfile is still the root one.
@@ -62,6 +62,7 @@ Config comes from `server/.env` (see `server/.env.example`); dev DB is `server/d
 ```bash
 bun run dev          # Dev server (Vite, run on the Bun runtime) on :3000
 bun run build        # Production build (bun run build:staging for the school server)
+bun run typecheck    # vue-tsc; the client pins TypeScript 5.9 because vue-tsc can't run on TS 7 (the server uses TS 7)
 bun fmt              # Format with Bun's built-in formatter (config in bunfig.toml)
 ```
 Frontend env vars used at build time: `PUBLIC_BASE_URL`, `PUBLIC_WS_URL`, `PUBLIC_WEB_URL` (dev proxy target for `/media` and `/ws`).

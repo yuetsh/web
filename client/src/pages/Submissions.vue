@@ -115,10 +115,8 @@ import FlagCell from "../components/submissions/FlagCell.vue"
 import ExpandedSubTable from "../components/submissions/ExpandedSubTable.vue"
 
 import { submission } from "../store/submission"
-import { taskTab, challengeDisplay } from "../store/task"
-import { step } from "../store/tutorial"
 import { html as eHtml, css as eCss, js as eJs } from "../store/editors"
-import { roleAdmin, roleSuper, user } from "../store/user"
+import { roleAdmin, roleSuper } from "../store/user"
 
 const route = useRoute()
 const router = useRouter()

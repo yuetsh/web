@@ -2,7 +2,7 @@
   <div class="prompt-panel">
     <div class="messages" ref="messagesRef">
       <div
-        v-for="(pair, pi) in pairs"
+        v-for="pair in pairs"
         :key="pair.assistantMsg?.id ?? 'user-' + pair.index"
         class="message-pair"
         :class="{ 'has-delete': pair.assistantMsg?.id && !streaming }"

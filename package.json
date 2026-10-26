@@ -8,7 +8,7 @@
     "build": "bun run --filter webpreview-client build",
     "build:staging": "bun run --filter webpreview-client build:staging",
     "test": "bun run --filter webpreview-server test",
-    "typecheck": "bun run --filter webpreview-server typecheck",
+    "typecheck": "bun run --filter '*' typecheck",
     "fmt": "bun run --filter webpreview-client fmt"
   }
 }

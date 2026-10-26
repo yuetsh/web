@@ -486,21 +486,6 @@ const countBuckets = computed(() => {
   ]
 })
 
-const scoreBars = computed(() => {
-  if (!stats.value) return []
-  const d = stats.value.score_distribution
-  const vals = [d.range_1_2, d.range_2_3, d.range_3_4, d.range_4_5, d.range_5]
-  const max = Math.max(...vals, 1)
-  const colors = ["#d03050", "#f0a020", "#2080f0", "#18a058", "#18a058"]
-  const labels = ["★", "★★", "★★★", "★★★★", "★★★★★"]
-  return vals.map((v, i) => ({
-    value: v,
-    label: labels[i],
-    color: colors[i],
-    height: Math.max(Math.round((v / max) * 68), 3) + "px",
-  }))
-})
-
 const flagBadges = computed(() => {
   if (!stats.value) return []
   const f = stats.value.flag_stats

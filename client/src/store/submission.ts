@@ -12,6 +12,8 @@ export const submission = ref<SubmissionAll>({
   task_type: TASK_TYPE.Tutorial,
   score: 0.0,
   my_score: 0,
+  submit_count: 0,
+  view_count: 0,
   html: "",
   css: "",
   js: "",
