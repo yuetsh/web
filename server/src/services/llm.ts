@@ -46,13 +46,9 @@ export const GUIDANCE_SYSTEM_PROMPT = `你是一个提示词写作教练，帮�
 5. 如果回复以 [READY] 开头，[READY] 不要加粗，必须保持原始文本
 6. 不要生成任何代码`
 
-const DEFAULT_MODEL = "deepseek-v4-flash"
-const MODEL_ALIASES: Record<string, string> = {
-  "deepseek-v4-flash-thinking": DEFAULT_MODEL,
-}
-const NON_THINKING_MODELS = new Set(["deepseek-v4-flash"])
+const DEFAULT_MODEL = "deepseek-flash"
 // 走火山方舟（ARK）接口的模型
-const ARK_MODELS = new Set(["doubao-seed-2-0-lite-260215"])
+const ARK_MODELS = new Set(["doubao-seed-2-1-lite-260915"])
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant"
@@ -70,18 +66,14 @@ interface CompletionOptions {
 export const llmConfigured = () => !!config.llmApiKey
 
 function buildRequest(messages: ChatMessage[], opts: CompletionOptions) {
-  const requested = opts.model || DEFAULT_MODEL
-  const resolved = MODEL_ALIASES[requested] ?? requested
-  const ark = ARK_MODELS.has(resolved)
+  const model = opts.model || DEFAULT_MODEL
+  const ark = ARK_MODELS.has(model)
   const body: Record<string, unknown> = {
-    model: resolved,
+    model,
     messages,
     stream: opts.stream,
   }
   if (opts.maxTokens) body.max_tokens = opts.maxTokens
-  if (NON_THINKING_MODELS.has(resolved) && !(requested in MODEL_ALIASES)) {
-    body.thinking = { type: "disabled" }
-  }
   const apiKey = ark ? config.arkApiKey : config.llmApiKey
   if (!apiKey) throw new Error("未配置模型接口密钥")
   const baseUrl = (ark ? config.arkBaseUrl : config.llmBaseUrl).replace(/\/$/, "")

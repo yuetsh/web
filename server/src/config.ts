@@ -28,7 +28,7 @@ export const config = {
   // 测试时不调用真实的模型接口
   llmApiKey: env.NODE_ENV === "test" ? "" : (env.LLM_API_KEY ?? ""),
   llmBaseUrl: env.LLM_BASE_URL ?? "https://api.deepseek.com",
-  llmModel: env.LLM_MODEL ?? "deepseek-v4-flash",
+  llmModel: env.LLM_MODEL ?? "deepseek-flash",
   arkApiKey: env.NODE_ENV === "test" ? "" : (env.ARK_API_KEY ?? ""),
   arkBaseUrl: env.ARK_BASE_URL ?? "https://ark.cn-beijing.volces.com/api/v3",
 }

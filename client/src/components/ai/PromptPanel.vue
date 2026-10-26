@@ -146,11 +146,10 @@ const messagesRef = ref<HTMLElement>()
 const naiveMessage = useMessage()
 
 const modelOptions = [
-  { label: "豆包", value: "doubao-seed-2-0-lite-260215" },
-  { label: "DeepSeek", value: "deepseek-v4-flash" },
-  { label: "DeepSeek(思考)", value: "deepseek-v4-flash-thinking" },
+  { label: "豆包", value: "doubao-seed-2-1-lite-260915" },
+  { label: "DeepSeek", value: "deepseek-flash" },
 ]
-const selectedModel = useStorage("prompt-model", "deepseek-v4-flash")
+const selectedModel = useStorage("prompt-model", "deepseek-flash")
 
 // Group messages into user+assistant pairs
 const submittingId = ref<number | null>(null)
