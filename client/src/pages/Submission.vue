@@ -1,39 +1,30 @@
 <script lang="ts" setup>
-import { onMounted, useTemplateRef } from "vue"
+import { onMounted, ref } from "vue"
 import { Submission } from "../api"
 import type { SubmissionAll } from "../utils/type"
-import { buildPreviewDocument } from "../utils/previewDocument"
+import { buildPreviewDocument, PREVIEW_SANDBOX } from "../utils/previewDocument"
 
 interface Props {
   id: string
 }
 const props = defineProps<Props>()
 
-const iframe = useTemplateRef<HTMLIFrameElement>("iframe")
+const content = ref("")
 
 async function init() {
   const submission: SubmissionAll = await Submission.get(props.id)
   Submission.incrementView(props.id)
-
-  if (!iframe.value) return
-  const doc = iframe.value.contentDocument
-  if (doc) {
-    doc.open()
-    doc.write(
-      buildPreviewDocument({
-        html: submission.html,
-        css: submission.css,
-        js: submission.js,
-      }),
-    )
-    doc.close()
-  }
+  content.value = buildPreviewDocument({
+    html: submission.html,
+    css: submission.css,
+    js: submission.js,
+  })
 }
 
 onMounted(init)
 </script>
 <template>
-  <iframe class="iframe" ref="iframe"></iframe>
+  <iframe class="iframe" :sandbox="PREVIEW_SANDBOX" :srcdoc="content"></iframe>
 </template>
 <style scoped>
 .iframe {

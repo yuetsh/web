@@ -14,7 +14,11 @@
       {{ current.task_title }} · 提交者 {{ current.username }}
     </n-text>
     <div class="preview-wrapper">
-      <iframe class="preview-iframe" :srcdoc="previewContent"></iframe>
+      <iframe
+        class="preview-iframe"
+        :sandbox="PREVIEW_SANDBOX"
+        :srcdoc="previewContent"
+      ></iframe>
     </div>
     <div class="rate-row">
       <n-rate
@@ -38,7 +42,10 @@ import { ref, watch, onUnmounted } from "vue"
 import { useMessage } from "naive-ui"
 import { Submission } from "../../api"
 import { streaming } from "../../store/prompt"
-import { buildPreviewDocument } from "../../utils/previewDocument"
+import {
+  buildPreviewDocument,
+  PREVIEW_SANDBOX,
+} from "../../utils/previewDocument"
 import type { RandomRatingItem } from "../../utils/type"
 
 const message = useMessage()

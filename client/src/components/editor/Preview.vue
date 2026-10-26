@@ -42,7 +42,11 @@
     </n-flex>
   </n-flex>
   <div class="iframe-wrapper" :style="iframeWrapperStyle">
-    <iframe class="iframe" :srcdoc="previewContent"></iframe>
+    <iframe
+      class="iframe"
+      :sandbox="PREVIEW_SANDBOX"
+      :srcdoc="previewContent"
+    ></iframe>
   </div>
 </template>
 <script lang="ts" setup>
@@ -54,7 +58,10 @@ import { submission } from "../../store/submission"
 import { useMessage } from "naive-ui"
 import { Icon } from "@iconify/vue"
 import copy from "copy-text-to-clipboard"
-import { buildPreviewDocument } from "../../utils/previewDocument"
+import {
+  buildPreviewDocument,
+  PREVIEW_SANDBOX,
+} from "../../utils/previewDocument"
 
 interface Props {
   html: string
@@ -145,9 +152,14 @@ function open() {
   } else {
     const newTab = window.open("about:blank", "_blank")
     if (!newTab) return
-    newTab.document.open()
-    newTab.document.write(getContent())
-    newTab.document.close()
+    // 新标签页和本站同源，代码要放进带 sandbox 的 iframe 里跑
+    const doc = newTab.document
+    doc.open()
+    doc.write(
+      `<!DOCTYPE html><title>预览</title><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;display:block}</style><iframe sandbox="${PREVIEW_SANDBOX}"></iframe>`,
+    )
+    doc.close()
+    doc.querySelector("iframe")!.srcdoc = getContent()
   }
 }
 

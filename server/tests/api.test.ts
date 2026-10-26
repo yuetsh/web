@@ -136,6 +136,10 @@ describe("评分", () => {
     const again = await (await client("s0"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 1 })
     expect(again.json.message).toBe("你已经给这个提交打过分了")
     expect((await (await client("s0"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 0 })).status).toBe(400)
+    expect((await (await client("s1"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 6 })).status).toBe(422)
+    const self = await (await client("author"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 5 })
+    expect(self.status).toBe(400)
+    expect(all(`SELECT 1 FROM submission_rating WHERE user_id = $id`, { id: author })).toEqual([])
   })
 })
 

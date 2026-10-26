@@ -240,7 +240,7 @@
 import { computed, ref, watch } from "vue"
 import { NPopconfirm, NButton, useMessage } from "naive-ui"
 import { Icon } from "@iconify/vue"
-import { marked } from "marked"
+import { renderMarkdown } from "../../utils/markdown"
 import { Prompt, Submission } from "../../api"
 import type { PromptRound } from "../../utils/type"
 import { user, roleSuper } from "../../store/user"
@@ -300,10 +300,6 @@ const selectedPageHtml = computed(() => {
   const script = round.js ? `<script>${round.js}<\/script>` : ""
   return `<!DOCTYPE html><html><head><meta charset="utf-8">${style}</head><body>${round.html}${script}</body></html>`
 })
-
-function renderMarkdown(text: string): string {
-  return marked.parse(text) as string
-}
 
 function isPromptLong(text: string): boolean {
   return text.length > 220 || text.split(/\r?\n/).length > 4

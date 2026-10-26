@@ -1,3 +1,8 @@
+// 预览里跑的是用户写的代码（可能是别人的提交），不能给 allow-same-origin，
+// 否则它和本站同源，能读 localStorage 里的登录 token
+export const PREVIEW_SANDBOX =
+  "allow-scripts allow-modals allow-forms allow-popups allow-pointer-lock"
+
 interface PreviewDocumentOptions {
   html: string
   css: string

@@ -530,9 +530,10 @@ router.post("/:id/view", (c) => {
 router.put("/:id/score", async (c) => {
   const user = requireUser(c)
   const id = uuidParam(c, "id")
-  const { score } = await body(c, z.object({ score: z.number().int() }))
+  const { score } = await body(c, z.object({ score: z.number().int().max(5) }))
   if (score <= 0) throw new HttpError(400, "分数不能为零")
-  orNotFound(get(`SELECT 1 FROM submission_submission WHERE id = $id`, { id }))
+  const sub = orNotFound(get<{ user_id: number }>(`SELECT user_id FROM submission_submission WHERE id = $id`, { id }))
+  if (sub.user_id === user.id) throw new HttpError(400, "不能给自己的提交打分")
 
   const exists = get(`SELECT 1 FROM submission_rating WHERE user_id = $user_id AND submission_id = $id`, {
     user_id: user.id,
