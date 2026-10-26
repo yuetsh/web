@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto"
 import { resolve } from "node:path"
 
 const env = process.env
@@ -19,8 +20,10 @@ export const config = {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
-  sessionCookie: "sessionid",
-  sessionAgeSeconds: 60 * 60 * 24 * 14,
+  // 未配置时每次启动随机生成：重启后 access token 全部失效，前端会用 refresh token 自动换新的
+  jwtSecret: env.JWT_SECRET || randomBytes(32).toString("hex"),
+  accessTokenSeconds: 15 * 60,
+  refreshTokenSeconds: 60 * 60 * 24 * 14,
 
   // 测试时不调用真实的模型接口
   llmApiKey: env.NODE_ENV === "test" ? "" : (env.LLM_API_KEY ?? ""),

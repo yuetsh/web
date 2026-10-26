@@ -2,10 +2,9 @@
 import { dateZhCN, zhCN } from "naive-ui"
 import type { GlobalThemeOverrides } from "naive-ui"
 import Login from "./components/Login.vue"
-import { onMounted, watch } from "vue"
+import { onMounted } from "vue"
 import { Account } from "./api"
-import { authed, user } from "./store/user"
-import { STORAGE_KEY } from "./utils/const"
+import { user } from "./store/user"
 import hljs from "highlight.js/lib/core"
 
 const themeOverrides: GlobalThemeOverrides = {
@@ -26,14 +25,6 @@ onMounted(async () => {
     user.role = data.role
   } catch {
     user.loaded = true
-  }
-})
-
-watch(authed, (v) => {
-  if (v) {
-    localStorage.setItem(STORAGE_KEY.LOGIN, "true")
-  } else {
-    localStorage.removeItem(STORAGE_KEY.LOGIN)
   }
 })
 </script>

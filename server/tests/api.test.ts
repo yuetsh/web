@@ -17,23 +17,57 @@ describe("权限", () => {
     expect((await adm("GET", "/api/submission/gradebook/?classname=a")).status).toBe(403)
   })
 
-  test("封号后会话失效", async () => {
+  test("封号后 access token 和 refresh token 都失效", async () => {
     const id = makeUser("stu")
     makeUser("boss", "super")
     const stu = await client("stu")
     expect((await stu("GET", "/api/account/profile")).json.username).toBe("stu")
     await (await client("boss"))("PUT", `/api/account/active/${id}`)
-    expect((await stu("GET", "/api/account/profile")).json.username).toBe("")
+    expect((await stu("GET", "/api/account/profile")).status).toBe(401)
+    const anon = await client()
+    const res = await anon("POST", "/api/account/refresh", { refresh_token: stu.tokens.refresh_token })
+    expect(res.status).toBe(401)
+  })
+})
+
+describe("JWT 登录", () => {
+  test("登录返回两个 token，refresh token 能换新的 access token", async () => {
+    makeUser("stu")
+    const stu = await client("stu")
+    expect(stu.tokens.access_token.split(".")).toHaveLength(3)
+    expect(get(`SELECT token_hash FROM auth_refresh_token`).token_hash).not.toBe(stu.tokens.refresh_token)
+
+    const anon = await client()
+    const res = await anon("POST", "/api/account/refresh", { refresh_token: stu.tokens.refresh_token })
+    expect(res.status).toBe(200)
+    stu.tokens.access_token = res.json.access_token
+    expect((await stu("GET", "/api/account/profile")).json.username).toBe("stu")
   })
 
-  test("跨站写请求被拒绝", async () => {
-    const { app } = await import("../src/app")
-    const res = await app.request("/api/account/login", {
-      method: "POST",
-      headers: { origin: "https://evil.example", "content-type": "application/json" },
-      body: "{}",
-    })
-    expect(res.status).toBe(403)
+  test("无效或过期的 access token 返回 401，不带 token 当作未登录", async () => {
+    makeUser("stu")
+    const stu = await client("stu")
+    const { sign } = await import("hono/jwt")
+    const { config } = await import("../src/config")
+    const userId = get(`SELECT id FROM account_user WHERE username = 'stu'`).id
+    stu.tokens.access_token = await sign({ sub: userId, exp: Math.floor(Date.now() / 1000) - 1 }, config.jwtSecret)
+    expect((await stu("GET", "/api/account/profile")).status).toBe(401)
+    stu.tokens.access_token = "garbage"
+    expect((await stu("GET", "/api/account/profile")).status).toBe(401)
+    expect((await (await client())("GET", "/api/account/profile")).json.username).toBe("")
+  })
+
+  test("退出和改密码都会作废 refresh token", async () => {
+    const id = makeUser("stu")
+    makeUser("boss", "super")
+    const anon = await client()
+    const a = await client("stu")
+    expect((await a("POST", "/api/account/logout", { refresh_token: a.tokens.refresh_token })).status).toBe(200)
+    expect((await anon("POST", "/api/account/refresh", { refresh_token: a.tokens.refresh_token })).status).toBe(401)
+
+    const b = await client("stu")
+    await (await client("boss"))("PUT", `/api/account/${id}`, { password: "newpass1" })
+    expect((await anon("POST", "/api/account/refresh", { refresh_token: b.tokens.refresh_token })).status).toBe(401)
   })
 })
 

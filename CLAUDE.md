@@ -12,19 +12,20 @@ The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1
 
 - **`server/`** — Bun + **Hono** HTTP API, Bun's native WebSocket, **`bun:sqlite`** (single SQLite file, WAL). No Redis, no Postgres.
   - `src/index.ts` — `Bun.serve`: WebSocket upgrades go to `ws.ts`, everything else to the Hono app
-  - `src/app.ts` — mounts routers under `/api/<prefix>`, CORS, Origin check on writes, session middleware, error → `{ detail }` JSON (ninja-compatible; validation errors are 422)
+  - `src/app.ts` — mounts routers under `/api/<prefix>`, CORS, auth middleware, error → `{ detail }` JSON (ninja-compatible; validation errors are 422)
   - `src/db.ts` — schema (`CREATE TABLE IF NOT EXISTS`, same DDL as Django), `all/get/run/tx` helpers using `$name` params, time (`now()`, `iso()`) and UUID (`uuidHex()`, `uuidOut()`) conversions
-  - `src/auth.ts` — Django-compatible password hashing, sessions in table `auth_session` (cookie `sessionid`), `requireUser/requireAdmin/requireSuper` (401 / 403)
+  - `src/auth.ts` — Django-compatible password hashing; JWT login, no cookies: `POST /account/login` returns a 15-min HS256 `access_token` (sent as `Authorization: Bearer`, signed with `JWT_SECRET`, random per process if unset) and a 14-day opaque `refresh_token` (only its sha256 is stored, in `auth_refresh_token`; `POST /account/refresh` trades it for a new access token, logout / password change / deactivation delete it). An invalid or expired Bearer token is a 401 even on public endpoints so the client knows to refresh. `requireUser/requireAdmin/requireSuper` (401 / 403)
   - `src/routes/` — `account`, `tasks` (tutorial / challenge / creation), `files` (task assets + image upload), `submission`, `showcase` (mounted under `/submission/showcase`), `prompt`
   - `src/services/` — `score.ts` (rating weights super×0.5, admin×0.3, normal×0.2, then Bayesian smoothing with C=3 and zones), `gradebook.ts`, `llm.ts` (OpenAI-compatible streaming via fetch; DeepSeek default, ARK for doubao models), `classifier.ts` (Bloom-level L1–L6 prompt tagging, runs in background), `cascade.ts` (Django's CASCADE deletes, done by hand), `pyround.ts` (`pyRound`/`pySum` reproduce Python's `round()` and `sum()` so scores match the old system bit-for-bit)
-  - `src/ws.ts` — `/ws/prompt/<task_id>/` (code generation chat) and `/ws/guidance/<task_id>/` (prompt coaching); messages per connection are processed serially; on disconnect the pending user message is deleted and the LLM request aborted
+  - `src/ws.ts` — `/ws/prompt/<task_id>/?token=<access_token>` (code generation chat) and `/ws/guidance/<task_id>/?token=...` (prompt coaching); messages per connection are processed serially; on disconnect the pending user message is deleted and the LLM request aborted
   - `scripts/` — one-off CLIs: `migrate-from-postgres.ts`, `create-superuser.ts`, `classify-prompts.ts`, `recalculate-scores.ts`
   - Roles: `super`, `admin`, `normal`. Task model is multi-table: `task_task` + one of `task_tutorial` / `task_challenge` / `task_creation` (`task_ptr_id`)
 
 - **`client/`** — Vue 3 + TypeScript SPA built with **Vite**; Bun is the package manager and runtime (no Node/npm)
   - `vite.config.ts` — browser targets are Chrome ≥ 87 (lab machines run Chrome 105); `@vitejs/plugin-legacy` only injects usage-based core-js polyfills, no legacy chunks
   - UI framework: **Naive UI** (auto-imported via `unplugin-vue-components`)
-  - `src/api.ts` — Axios-based API client; 401 clears login and goes home, 403 alerts and goes home
+  - `src/token.ts` — tokens in localStorage; refreshes the access token shortly before expiry (one request at a time) and builds WebSocket URLs
+  - `src/api.ts` — Axios-based API client; adds the Bearer header, on 401 refreshes once and retries, otherwise clears login and goes home; 403 alerts and goes home
   - `src/router.ts` — Vue Router with auth guards
   - `src/store/` — Reactive state (plain Vue refs, not Vuex/Pinia); `prompt.ts` / `guidance.ts` own the WebSockets
   - `src/pages/`, `src/components/` — user management uses `components/dashboard/UserFormModal.vue` (there is no Django Admin anymore)

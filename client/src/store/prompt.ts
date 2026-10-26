@@ -1,5 +1,5 @@
 import { ref } from "vue"
-import { WS_BASE_URL } from "../utils/const"
+import { wsUrl } from "../token"
 import { html, css, js } from "./editors"
 
 export interface PromptMessage {
@@ -29,12 +29,18 @@ export function setOnCodeComplete(fn: typeof _onCodeComplete) {
 }
 
 let ws: WebSocket | null = null
+// 取 token 要等一下，期间又连了别的题或断开时作废这次连接
+let connectSeq = 0
 
-export function connectPrompt(taskId: number) {
+export async function connectPrompt(taskId: number) {
   currentTaskId.value = taskId
   if (ws) ws.close()
+  ws = null
 
-  ws = new WebSocket(`${WS_BASE_URL}/ws/prompt/${taskId}/`)
+  const seq = ++connectSeq
+  const url = await wsUrl(`/ws/prompt/${taskId}/`)
+  if (seq !== connectSeq) return
+  ws = new WebSocket(url)
 
   ws.onopen = () => {
     connected.value = true
@@ -92,6 +98,7 @@ export function connectPrompt(taskId: number) {
 }
 
 export function disconnectPrompt() {
+  connectSeq++
   if (ws) {
     ws.close()
     ws = null

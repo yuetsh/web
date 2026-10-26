@@ -25,24 +25,46 @@ import type {
   CreationDetail,
   CreationIn,
 } from "./utils/type"
-import { BASE_URL, STORAGE_KEY } from "./utils/const"
+import { BASE_URL } from "./utils/const"
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  hasLogin,
+  refreshAccessToken,
+  setTokens,
+} from "./token"
+import { user } from "./store/user"
 
 const http = axios.create({
   baseURL: BASE_URL,
-  xsrfCookieName: "xsrfCookieName",
-  xsrfHeaderName: "X-CSRFTOKEN",
-  withCredentials: true,
+})
+
+http.interceptors.request.use(async (config) => {
+  const token = await getAccessToken()
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
 })
 
 http.interceptors.response.use(
   (res) => {
     return res
   },
-  (err) => {
+  async (err) => {
     if (err.response) {
+      // access token 失效（如服务端重启换了密钥）：刷新一次后重试
+      if (
+        err.response.status === 401 &&
+        hasLogin() &&
+        !err.config._retried
+      ) {
+        err.config._retried = true
+        if (await refreshAccessToken()) return http(err.config)
+      }
       switch (err.response.status) {
         case 401: // 未授权
-          localStorage.removeItem(STORAGE_KEY.LOGIN)
+          clearTokens()
+          user.username = ""
           router.push("/")
           break
         case 403: // 禁止访问
@@ -62,12 +84,14 @@ http.interceptors.response.use(
 export const Account = {
   async login(username: string, password: string) {
     const res = await http.post("/account/login", { username, password })
+    setTokens(res.data)
     return res.data
   },
 
   async logout() {
-    const res = await http.post("/account/logout")
-    return res.data
+    const refresh_token = getRefreshToken()
+    clearTokens()
+    await http.post("/account/logout", { refresh_token })
   },
 
   async getMyProfile() {

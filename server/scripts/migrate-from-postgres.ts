@@ -101,7 +101,7 @@ await pg.close()
 db.transaction(() => {
   db.run("PRAGMA defer_foreign_keys = ON")
   for (const table of [...TABLES].reverse()) db.run(`DELETE FROM ${quote(table)}`)
-  db.run(`DELETE FROM auth_session`)
+  db.run(`DELETE FROM auth_refresh_token`)
   for (const table of TABLES) {
     const rows = rowsByTable[table]!
     if (!rows.length) {

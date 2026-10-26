@@ -1,7 +1,6 @@
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun"
-import { config } from "./config"
 import { all, run, iso, uuidOut } from "./db"
-import { parseCookie, userFromSessionKey, type User } from "./auth"
+import { userFromAccessToken, type User } from "./auth"
 import { canAccessTask, getOrCreateActiveConversation, insertMessage } from "./services/prompt"
 import {
   extractCode,
@@ -10,7 +9,6 @@ import {
   streamGuidance,
   type ChatMessage,
 } from "./services/llm"
-import { isAllowedOrigin } from "./origin"
 
 type Kind = "prompt" | "guidance"
 
@@ -34,14 +32,15 @@ type WS = ServerWebSocket<WsData>
 const PATH_RE = /^\/ws\/(prompt|guidance)\/(\d+)\/?$/
 
 // 处理 WebSocket 升级请求；返回 undefined 表示已升级，返回 Response 表示拒绝或不是 ws 路径
-export function upgrade(req: Request, server: Server<WsData>): Response | undefined | null {
+// 浏览器建 WebSocket 时不能加请求头，access token 放在 ?token= 里
+export async function upgrade(
+  req: Request,
+  server: Server<WsData>,
+): Promise<Response | undefined | null> {
   const url = new URL(req.url)
   const match = PATH_RE.exec(url.pathname)
   if (!match) return null
-  if (!isAllowedOrigin(req.headers.get("origin"), req.headers.get("host"))) {
-    return new Response("Forbidden", { status: 403 })
-  }
-  const user = userFromSessionKey(parseCookie(req.headers.get("cookie"), config.sessionCookie))
+  const user = await userFromAccessToken(url.searchParams.get("token"))
   const taskId = Number(match[2])
   if (!user || !canAccessTask(user, taskId)) return new Response("Forbidden", { status: 403 })
 

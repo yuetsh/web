@@ -48,9 +48,9 @@ export function makeSubmission(userId: number, taskId: number, score = 0, create
 
 export const uuid = (hex: string) => uuidOut(hex)
 
-/** 登录后返回一个带 cookie 的请求函数 */
+/** 登录后返回一个带 access token 的请求函数，tokens 是登录拿到的 token */
 export async function client(username?: string) {
-  let cookie = ""
+  const tokens = { access_token: "", refresh_token: "" }
   if (username) {
     const res = await app.request("/api/account/login", {
       method: "POST",
@@ -58,10 +58,11 @@ export async function client(username?: string) {
       body: JSON.stringify({ username, password: PASSWORD }),
     })
     if (res.status !== 200) throw new Error(`login failed: ${res.status}`)
-    cookie = res.headers.get("set-cookie")!.split(";")[0]!
+    Object.assign(tokens, await res.json())
   }
-  return async (method: string, path: string, body?: unknown) => {
-    const headers: Record<string, string> = { cookie }
+  const request = async (method: string, path: string, body?: unknown) => {
+    const headers: Record<string, string> = {}
+    if (tokens.access_token) headers.authorization = `Bearer ${tokens.access_token}`
     if (body !== undefined) headers["content-type"] = "application/json"
     const res = await app.request(path, {
       method,
@@ -75,4 +76,5 @@ export async function client(username?: string) {
     } catch {}
     return { status: res.status, json, text, headers: res.headers }
   }
+  return Object.assign(request, { tokens })
 }

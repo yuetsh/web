@@ -5,9 +5,10 @@ import { all, get, run, tx, now, iso, likeEscape } from "../db"
 import {
   Role,
   authenticate,
-  login,
-  logout,
+  issueTokens,
   makePassword,
+  refreshAccessToken,
+  revokeRefreshToken,
   requireSuper,
   requireUser,
   setPassword,
@@ -70,13 +71,18 @@ router.post("/login", async (c) => {
   const payload = await body(c, z.object({ username: z.string(), password: z.string() }))
   const user = await authenticate(payload.username, payload.password)
   if (!user) throw new HttpError(401, "账号密码错误")
-  login(c, user)
-  return c.json({ username: user.username, role: user.role })
+  return c.json({ username: user.username, role: user.role, ...(await issueTokens(user)) })
 })
 
-router.post("/logout", (c) => {
-  requireUser(c)
-  logout(c)
+router.post("/refresh", async (c) => {
+  const payload = await body(c, z.object({ refresh_token: z.string() }))
+  return c.json({ access_token: await refreshAccessToken(payload.refresh_token) })
+})
+
+// access token 是无状态的，退出只需作废 refresh token；不要求登录，过期了也能退出
+router.post("/logout", async (c) => {
+  const payload = await body(c, z.object({ refresh_token: z.string().optional() }))
+  if (payload.refresh_token) revokeRefreshToken(payload.refresh_token)
   return c.json({ message: "退出成功" })
 })
 
@@ -248,7 +254,7 @@ router.put("/active/:id", (c) => {
   )
   const active = !user.is_active
   run(`UPDATE account_user SET is_active = $active WHERE id = $id`, { active, id })
-  if (!active) run(`DELETE FROM auth_session WHERE user_id = $id`, { id })
+  if (!active) run(`DELETE FROM auth_refresh_token WHERE user_id = $id`, { id })
   return c.json({ message: `${user.username} ${active ? "解封" : "封号"}成功` })
 })
 

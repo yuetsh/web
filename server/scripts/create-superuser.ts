@@ -20,7 +20,7 @@ if (user) {
        is_superuser = 1, is_staff = 1, is_active = 1 WHERE id = $id`,
     { hash, raw: password.slice(0, 20), id: user.id },
   )
-  run(`DELETE FROM auth_session WHERE user_id = $id`, { id: user.id })
+  run(`DELETE FROM auth_refresh_token WHERE user_id = $id`, { id: user.id })
   console.log(`已将 ${username} 设为超级管理员并重设密码`)
 } else {
   run(

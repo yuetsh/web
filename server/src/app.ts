@@ -1,9 +1,8 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { config } from "./config"
-import { sessionMiddleware } from "./auth"
+import { authMiddleware } from "./auth"
 import { HttpError, ValidationError, type Env } from "./http"
-import { isAllowedOrigin } from "./origin"
 import account from "./routes/account"
 import { tutorial, challenge, creation } from "./routes/tasks"
 import { assets, upload } from "./routes/files"
@@ -14,22 +13,10 @@ import { mediaPath } from "./routes/files"
 // strict: false —— 带不带结尾的斜杠都能匹配（前端两种写法都有）
 export const app = new Hono<Env>({ strict: false })
 
-app.use(
-  "/api/*",
-  cors({ origin: config.allowedOrigins, credentials: true }),
-)
+// 登录凭证放在 Authorization 头里，浏览器不会自动带上，所以不需要 cookie 和 CSRF 防护
+app.use("/api/*", cors({ origin: config.allowedOrigins }))
 
-// 会话 cookie 是 SameSite=Lax，再加一道 Origin 校验防止跨站写请求
-app.use("/api/*", async (c, next) => {
-  if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method)) {
-    if (!isAllowedOrigin(c.req.header("origin") ?? null, c.req.header("host") ?? null)) {
-      return c.json({ detail: "跨站请求被拒绝" }, 403)
-    }
-  }
-  await next()
-})
-
-app.use("/api/*", sessionMiddleware)
+app.use("/api/*", authMiddleware)
 
 const api = new Hono<Env>({ strict: false })
 api.route("/account", account)

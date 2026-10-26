@@ -1,6 +1,6 @@
-import { pbkdf2 as pbkdf2Cb, randomBytes, timingSafeEqual } from "node:crypto"
+import { createHash, pbkdf2 as pbkdf2Cb, randomBytes, timingSafeEqual } from "node:crypto"
 import { promisify } from "node:util"
-import { getCookie, setCookie, deleteCookie } from "hono/cookie"
+import { sign, verify } from "hono/jwt"
 import type { MiddlewareHandler } from "hono"
 import { config } from "./config"
 import { get, run, now, toDbTime } from "./db"
@@ -54,8 +54,8 @@ export async function setPassword(userId: number, raw: string) {
     `UPDATE account_user SET password = $password, raw_password = $raw WHERE id = $id`,
     { password: await makePassword(raw), raw: raw.slice(0, 20), id: userId },
   )
-  // 改密码后让该用户的其它会话失效（与 Django 行为一致）
-  run(`DELETE FROM auth_session WHERE user_id = $id`, { id: userId })
+  // 改密码后让该用户的 refresh token 全部失效（与 Django 行为一致）
+  run(`DELETE FROM auth_refresh_token WHERE user_id = $id`, { id: userId })
 }
 
 // ── 会话 ──
@@ -76,53 +76,68 @@ export async function authenticate(username: string, password: string) {
   return user as User
 }
 
-export function login(c: Ctx, user: User) {
-  const key = randomBytes(24).toString("base64url")
-  const expire = new Date(Date.now() + config.sessionAgeSeconds * 1000)
-  run(`DELETE FROM auth_session WHERE expire_at < $now`, { now: now() })
+// access token 是短期 JWT（只带用户 id，每次请求仍查一次用户，封号立即生效）；
+// refresh token 是随机串，表 auth_refresh_token 里只存它的 sha256，用来换新的 access token
+const hashToken = (token: string) => createHash("sha256").update(token).digest("hex")
+
+function signAccessToken(userId: number) {
+  const exp = Math.floor(Date.now() / 1000) + config.accessTokenSeconds
+  return sign({ sub: userId, exp }, config.jwtSecret, "HS256")
+}
+
+export async function issueTokens(user: User) {
+  const refreshToken = randomBytes(32).toString("base64url")
+  const expire = new Date(Date.now() + config.refreshTokenSeconds * 1000)
+  run(`DELETE FROM auth_refresh_token WHERE expire_at < $now`, { now: now() })
   run(
-    `INSERT INTO auth_session (key, user_id, expire_at) VALUES ($key, $user_id, $expire_at)`,
-    { key, user_id: user.id, expire_at: toDbTime(expire) },
+    `INSERT INTO auth_refresh_token (token_hash, user_id, expire_at) VALUES ($hash, $user_id, $expire_at)`,
+    { hash: hashToken(refreshToken), user_id: user.id, expire_at: toDbTime(expire) },
   )
   run(`UPDATE account_user SET last_login = $now WHERE id = $id`, {
     now: now(),
     id: user.id,
   })
-  setCookie(c, config.sessionCookie, key, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "Lax",
-    maxAge: config.sessionAgeSeconds,
-  })
+  return { access_token: await signAccessToken(user.id), refresh_token: refreshToken }
 }
 
-export function logout(c: Ctx) {
-  const key = getCookie(c, config.sessionCookie)
-  if (key) run(`DELETE FROM auth_session WHERE key = $key`, { key })
-  deleteCookie(c, config.sessionCookie, { path: "/" })
+export async function refreshAccessToken(refreshToken: string) {
+  const row = get<{ id: number }>(
+    `SELECT u.id FROM auth_refresh_token t JOIN account_user u ON u.id = t.user_id
+     WHERE t.token_hash = $hash AND t.expire_at > $now AND u.is_active = 1`,
+    { hash: hashToken(refreshToken), now: now() },
+  )
+  if (!row) throw new HttpError(401, "登录已过期，请重新登录")
+  return signAccessToken(row.id)
 }
 
-export function userFromSessionKey(key: string | undefined): User | null {
-  if (!key) return null
+export function revokeRefreshToken(refreshToken: string) {
+  run(`DELETE FROM auth_refresh_token WHERE token_hash = $hash`, { hash: hashToken(refreshToken) })
+}
+
+export async function userFromAccessToken(token: string | null | undefined): Promise<User | null> {
+  if (!token) return null
+  let payload
+  try {
+    payload = await verify(token, config.jwtSecret, "HS256")
+  } catch {
+    return null
+  }
   return get<User>(
-    `SELECT u.id, u.username, u.role, u.classname, u.is_active
-     FROM auth_session s JOIN account_user u ON u.id = s.user_id
-     WHERE s.key = $key AND s.expire_at > $now AND u.is_active = 1`,
-    { key, now: now() },
+    `SELECT id, username, role, classname, is_active FROM account_user
+     WHERE id = $id AND is_active = 1`,
+    { id: Number(payload.sub) },
   )
 }
 
-export function parseCookie(header: string | null, name: string) {
-  if (!header) return undefined
-  for (const part of header.split(";")) {
-    const [k, ...v] = part.trim().split("=")
-    if (k === name) return decodeURIComponent(v.join("="))
+export const authMiddleware: MiddlewareHandler<Env> = async (c, next) => {
+  const header = c.req.header("authorization")
+  let user: User | null = null
+  if (header?.startsWith("Bearer ")) {
+    user = await userFromAccessToken(header.slice("Bearer ".length))
+    // 带了 token 却无效（过期、被封号）时返回 401，前端据此去刷新 token，而不是当成未登录
+    if (!user) throw new HttpError(401, "登录已过期")
   }
-  return undefined
-}
-
-export const sessionMiddleware: MiddlewareHandler<Env> = async (c, next) => {
-  c.set("user", userFromSessionKey(getCookie(c, config.sessionCookie)))
+  c.set("user", user)
   await next()
 }
 

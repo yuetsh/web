@@ -48,8 +48,10 @@ CREATE TABLE IF NOT EXISTS "prompt_message" ("id" integer NOT NULL PRIMARY KEY A
 CREATE INDEX IF NOT EXISTS "prompt_message_conversation_id_af18dd4b" ON "prompt_message" ("conversation_id");
 CREATE INDEX IF NOT EXISTS "prompt_message_prompt_level_e461b596" ON "prompt_message" ("prompt_level");
 
-CREATE TABLE IF NOT EXISTS "auth_session" ("key" text NOT NULL PRIMARY KEY, "user_id" bigint NOT NULL REFERENCES "account_user" ("id") ON DELETE CASCADE, "expire_at" datetime NOT NULL);
-CREATE INDEX IF NOT EXISTS "auth_session_user_id" ON "auth_session" ("user_id");
+-- 登录用 JWT：access token 不落库，refresh token 只存 sha256
+DROP TABLE IF EXISTS "auth_session";
+CREATE TABLE IF NOT EXISTS "auth_refresh_token" ("token_hash" text NOT NULL PRIMARY KEY, "user_id" bigint NOT NULL REFERENCES "account_user" ("id") ON DELETE CASCADE, "expire_at" datetime NOT NULL);
+CREATE INDEX IF NOT EXISTS "auth_refresh_token_user_id" ON "auth_refresh_token" ("user_id");
 `
 
 export function openDb(path: string): Database {

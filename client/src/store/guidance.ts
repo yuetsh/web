@@ -1,5 +1,5 @@
 import { ref } from "vue"
-import { WS_BASE_URL } from "../utils/const"
+import { wsUrl } from "../token"
 
 export interface GuidanceMessage {
   role: "user" | "assistant"
@@ -17,6 +17,18 @@ export const initialPrompt = ref("")
 
 let ws: WebSocket | null = null
 let _taskId = 0
+// 取 token 要等一下，期间又重连或关闭时作废这次连接
+let connectSeq = 0
+
+async function connect(taskId: number) {
+  if (ws) ws.close()
+  ws = null
+  const seq = ++connectSeq
+  const url = await wsUrl(`/ws/guidance/${taskId}/`)
+  if (seq !== connectSeq) return
+  ws = new WebSocket(url)
+  setupHandlers(ws)
+}
 
 function setupHandlers(socket: WebSocket) {
   socket.onopen = () => {
@@ -69,9 +81,7 @@ export function openGuidance(taskId: number, prompt: string) {
   streamingContent.value = ""
   isOpen.value = true
 
-  if (ws) ws.close()
-  ws = new WebSocket(`${WS_BASE_URL}/ws/guidance/${taskId}/`)
-  setupHandlers(ws)
+  connect(taskId)
 }
 
 export function sendGuidance(content: string) {
@@ -88,14 +98,13 @@ export function stopGuidance() {
   streaming.value = false
   streamingContent.value = ""
   if (_taskId) {
-    if (ws) ws.close()
-    ws = new WebSocket(`${WS_BASE_URL}/ws/guidance/${_taskId}/`)
     initialPrompt.value = ""
-    setupHandlers(ws)
+    connect(_taskId)
   }
 }
 
 export function closeGuidance() {
+  connectSeq++
   if (ws) {
     ws.close()
     ws = null
