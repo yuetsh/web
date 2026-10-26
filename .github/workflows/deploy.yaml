@@ -18,9 +18,10 @@ jobs:
           - name: debian
             build_command: build
             remote_port: 22
-          - name: school
-            build_command: build:staging
-            remote_port: 8822
+          # school 暂时停用，需要时恢复（并先按 docs/migrate-to-bun.md 切换那台服务器）
+          # - name: school
+          #   build_command: build:staging
+          #   remote_port: 8822
     steps:
       - uses: actions/checkout@v4
 
