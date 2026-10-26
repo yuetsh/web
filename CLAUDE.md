@@ -18,7 +18,7 @@ The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1
   - `src/routes/` — `account`, `tasks` (tutorial / challenge / creation), `files` (task assets + image upload), `submission`, `showcase` (mounted under `/submission/showcase`), `prompt`
   - `src/services/` — `score.ts` (rating weights super×0.5, admin×0.3, normal×0.2, then Bayesian smoothing with C=3 and zones), `gradebook.ts`, `llm.ts` (OpenAI-compatible streaming via fetch; DeepSeek default, ARK for doubao models), `classifier.ts` (Bloom-level L1–L6 prompt tagging, runs in background), `cascade.ts` (Django's CASCADE deletes, done by hand), `pyround.ts` (`pyRound`/`pySum` reproduce Python's `round()` and `sum()` so scores match the old system bit-for-bit)
   - `src/ws.ts` — `/ws/prompt/<task_id>/?token=<access_token>` (code generation chat) and `/ws/guidance/<task_id>/?token=...` (prompt coaching); messages per connection are processed serially; on disconnect the pending user message is deleted and the LLM request aborted
-  - `scripts/` — one-off CLIs: `migrate-from-postgres.ts`, `create-superuser.ts`, `classify-prompts.ts`, `recalculate-scores.ts`
+  - `scripts/` — one-off CLIs: `create-superuser.ts`, `classify-prompts.ts`, `recalculate-scores.ts`
   - Roles: `super`, `admin`, `normal`. Task model is multi-table: `task_task` + one of `task_tutorial` / `task_challenge` / `task_creation` (`task_ptr_id`)
 
 - **`client/`** — Vue 3 + TypeScript SPA built with **Vite**; Bun is the package manager and runtime (no Node/npm)
@@ -31,7 +31,7 @@ The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1
   - `src/pages/`, `src/components/` — user management uses `components/dashboard/UserFormModal.vue` (there is no Django Admin anymore)
 
 - **`Caddyfile`** — serves SPA from `build/` and `/media`, proxies `/api*` and `/ws*` to the backend
-- **`docker-compose.yaml`** — `webpreview-web` (Caddy) and `webpreview-api` (Bun); `webpreview-db` (Postgres) exists only under the `migrate` profile for the one-time data migration
+- **`docker-compose.yaml`** — `webpreview-web` (Caddy) and `webpreview-api` (Bun); the API reads the repo-root `.env` via `env_file` (`server/.env` is only for local dev). The one-time Postgres → SQLite migration (script, `webpreview-db` service, `docs/migrate-to-bun.md`) was removed after commit `cdeb7c1`; restore it from there if another server still needs the cutover
 - **`.github/workflows/deploy.yaml`** — on push to `main`: build client with Bun, rsync to server `build/`, then `git pull && docker compose up -d --build` on the server
 
 ## Development Commands
@@ -72,6 +72,7 @@ Frontend env vars used at build time: `PUBLIC_BASE_URL`, `PUBLIC_WS_URL`, `PUBLI
 docker compose up -d --build
 docker compose run --rm webpreview-api bun scripts/create-superuser.ts <username> <password>
 ```
+Back up production by copying `sqlite/` (or `sqlite3 sqlite/db.sqlite3 ".backup backup.sqlite3"`).
 
 ## Key Technical Details
 

@@ -18,7 +18,8 @@ jobs:
           - name: debian
             build_command: build
             remote_port: 22
-          # school 暂时停用，需要时恢复（并先按 docs/migrate-to-bun.md 切换那台服务器）
+          # school 暂时停用，需要时恢复。那台还没从 Postgres 迁到 SQLite：迁移脚本、webpreview-db 服务和
+          # 步骤文档已删除，从提交 cdeb7c1 里找回（git show cdeb7c1:docs/migrate-to-bun.md）
           # - name: school
           #   build_command: build:staging
           #   remote_port: 8822
