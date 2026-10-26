@@ -107,9 +107,13 @@ function handleLogin() {
 }
 
 async function handleLogout() {
-  await Account.logout()
-  user.username = ""
-  user.role = Role.Normal
+  // token 已经先清掉了，退出请求失败（比如断网）界面也要显示为已退出
+  try {
+    await Account.logout()
+  } finally {
+    user.username = ""
+    user.role = Role.Normal
+  }
 }
 </script>
 <style scoped>

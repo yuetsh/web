@@ -53,9 +53,11 @@ const SUBMISSION_SELECT = `SELECT s.id, s.user_id, u.username, s.task_id, t.disp
     s.view_count, s.created, s.modified,
     (SELECT r.score FROM submission_rating r WHERE r.user_id = $me AND r.submission_id = s.id LIMIT 1) AS my_score`
 
+// +s.task_id：不让 SQLite 从 task_task 出发、用 task_id 单列索引去找提交（那样要回表读
+// html/css/js 大行，6 万条提交时列表要几百毫秒），改走 slim 覆盖索引；按 task_id 筛选不受影响
 const SUBMISSION_FROM = `FROM submission_submission s
   JOIN account_user u ON u.id = s.user_id
-  JOIN task_task t ON t.id = s.task_id`
+  JOIN task_task t ON t.id = +s.task_id`
 
 function submissionOut(s: any) {
   return {
@@ -269,7 +271,8 @@ router.get("/", (c) => {
     score: "s.score ASC",
     "-created": "s.created DESC",
   }
-  const orderBy = orderings[f.ordering ?? ""] ?? "s.created DESC"
+  // 同分、同一时间的提交很多，加上 rowid 让排序唯一，翻页才不会重复或漏掉
+  const orderBy = `${orderings[f.ordering ?? ""] ?? "s.created DESC"}, s.rowid DESC`
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : ""
   const { limit, offset } = pageWindow(f)
 

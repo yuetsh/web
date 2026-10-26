@@ -60,6 +60,8 @@ http.interceptors.response.use(
       ) {
         err.config._retried = true
         if (await refreshAccessToken()) return http(err.config)
+        // 刷新失败但 refresh token 还在，说明只是网络问题：保留登录，下次请求再试
+        if (hasLogin()) return Promise.reject(err)
       }
       switch (err.response.status) {
         case 401: // 未授权
@@ -277,7 +279,7 @@ export const Submission = {
     username?: string
     user_id?: number
     flag?: string | null
-    zone?: string
+    zone?: string | null
     task_id?: number
     task_type?: string
     score_min?: number
@@ -553,7 +555,11 @@ export const TaskAssets = {
     ).data
   },
   async deleteChallenge(display: number, name: string) {
-    return (await http.delete(`/assets/challenge/${display}/${name}`)).data
+    return (
+      await http.delete(
+        `/assets/challenge/${display}/${encodeURIComponent(name)}`,
+      )
+    ).data
   },
   async listTutorial(display: number): Promise<TaskAsset[]> {
     return (await http.get<TaskAsset[]>(`/assets/tutorial/${display}`)).data
@@ -573,6 +579,10 @@ export const TaskAssets = {
     ).data
   },
   async deleteTutorial(display: number, name: string) {
-    return (await http.delete(`/assets/tutorial/${display}/${name}`)).data
+    return (
+      await http.delete(
+        `/assets/tutorial/${display}/${encodeURIComponent(name)}`,
+      )
+    ).data
   },
 }

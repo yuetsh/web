@@ -317,20 +317,28 @@ async function loadClasses() {
   }
 }
 
+// 快速切换班级时只用最后一次请求的结果
+let loadSeq = 0
+
 async function loadGradebook() {
+  const seq = ++loadSeq
   if (!query.classname) {
     gradebook.value = null
+    loading.value = false
     return
   }
   loading.value = true
   loadError.value = ""
   try {
-    gradebook.value = await Gradebook.get(query)
-    classes.value = gradebook.value.classes
+    const data = await Gradebook.get(query)
+    if (seq !== loadSeq) return
+    gradebook.value = data
+    classes.value = data.classes
   } catch (err: any) {
+    if (seq !== loadSeq) return
     loadError.value = err.response?.data?.detail ?? "成绩册加载失败"
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -358,8 +366,10 @@ watchDebounced(
 )
 
 onMounted(async () => {
+  const before = query.classname
   await loadClasses()
-  await loadGradebook()
+  // loadClasses 选了默认班级时，上面的 watch 已经会加载
+  if (query.classname === before) loadGradebook()
 })
 </script>
 

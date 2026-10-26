@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, test } from "bun:test"
 import { get, all } from "../src/db"
+import { app } from "../src/app"
+import { config } from "../src/config"
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { client, freshDb, makeSubmission, makeTask, makeUser, uuid } from "./helpers"
 
 beforeEach(freshDb)
@@ -371,5 +376,42 @@ describe("自由创作", () => {
     expect(saved.html).toBe("<p>")
     expect((await me("GET", "/api/creation/mine")).json[0].has_code).toBe(true)
     expect((await me("POST", "/api/submission/", { task_id: c.task_id })).json.detail).toBe("自由创作不需要提交")
+  })
+})
+
+describe("任务素材", () => {
+  test("同名上传原地覆盖，文件名不合法 422", async () => {
+    const media = await mkdtemp(join(tmpdir(), "media-"))
+    const saved = config.mediaRoot
+    config.mediaRoot = media
+    try {
+      makeUser("adm", "admin")
+      makeTask("挑战", "challenge", 3)
+      const adm = await client("adm")
+      const upload = (name: string, body: string) => {
+        const form = new FormData()
+        form.append("name", name)
+        form.append("file", new File([body], "x"))
+        return app.request("/api/assets/challenge/3", {
+          method: "POST",
+          headers: { authorization: `Bearer ${adm.tokens.access_token}` },
+          body: form,
+        })
+      }
+      expect((await upload("a.css", "v1")).status).toBe(200)
+      const res = await upload("a.css", "v2")
+      expect(((await res.json()) as any).url).toBe("/media/tasks/challenge/3/a.css")
+      const dir = join(media, "tasks/challenge/3")
+      expect(await readdir(dir)).toEqual(["a.css"])
+      expect(await readFile(join(dir, "a.css"), "utf8")).toBe("v2")
+      for (const bad of ["a b.png", "../x.png", "a/b.png", "x#.png"]) {
+        expect((await upload(bad, "x")).status).toBe(422)
+      }
+      expect((await adm("DELETE", "/api/assets/challenge/3/a.css")).status).toBe(200)
+      expect(await readdir(dir)).toEqual([])
+    } finally {
+      config.mediaRoot = saved
+      await rm(media, { recursive: true, force: true })
+    }
   })
 })

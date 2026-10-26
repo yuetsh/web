@@ -210,8 +210,15 @@ function selectItem(item: HistoryViewItem) {
   })
 }
 
+// 加载中又要求刷新（比如自动提交了新代码、换了任务），等这次完成后再加载一次
+let reloadAfter = false
+
 async function load(force = true) {
-  if (!props.taskId || loading.value) return
+  if (!props.taskId) return
+  if (loading.value) {
+    reloadAfter = true
+    return
+  }
   if (!force && loadedTaskId === props.taskId) return
   loading.value = true
   try {
@@ -230,6 +237,10 @@ async function load(force = true) {
     loadedTaskId = props.taskId
   } finally {
     loading.value = false
+    if (reloadAfter) {
+      reloadAfter = false
+      load(true)
+    }
   }
 }
 

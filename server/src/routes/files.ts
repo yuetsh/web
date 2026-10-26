@@ -1,6 +1,5 @@
 import { Hono } from "hono"
-import { mkdir, rm } from "node:fs/promises"
-import { existsSync } from "node:fs"
+import { mkdir, rename, rm } from "node:fs/promises"
 import { dirname, extname, join, resolve, sep } from "node:path"
 import { config } from "../config"
 import { all, get, run } from "../db"
@@ -20,20 +19,6 @@ export function mediaPath(relative: string) {
   const full = resolve(root, relative)
   if (full !== root && !full.startsWith(root + sep)) throw new HttpError(400, "无效的路径")
   return full
-}
-
-async function saveFile(relative: string, file: File) {
-  let target = relative
-  // 同名文件已存在时加随机后缀（Django 存储的行为）
-  while (existsSync(mediaPath(target))) {
-    const ext = extname(relative)
-    const suffix = Math.random().toString(36).slice(2, 9)
-    target = relative.slice(0, relative.length - ext.length) + "_" + suffix + ext
-  }
-  const full = mediaPath(target)
-  await mkdir(dirname(full), { recursive: true })
-  await Bun.write(full, file)
-  return target
 }
 
 async function formFile(c: Ctx, field: string) {
@@ -88,21 +73,35 @@ for (const kind of ["challenge", "tutorial"] as const) {
     if (typeof name !== "string" || !name) {
       throw new ValidationError([{ loc: ["body", "name"], msg: "缺少文件名" }])
     }
-    const existing = get<{ id: number; file: string }>(
-      `SELECT id, file FROM task_taskasset WHERE task_id = $task_id AND name = $name`,
+    // 学生代码按这个名字引用素材（<base href> 指向素材目录），存储的文件名必须和它一致
+    if (name !== validFilename(name) || name.length > 100) {
+      throw new ValidationError([
+        { loc: ["body", "name"], msg: "文件名只能包含字母、数字和 - _ .，最多 100 个字符" },
+      ])
+    }
+    const existing = get<{ file: string }>(
+      `SELECT file FROM task_taskasset WHERE task_id = $task_id AND name = $name`,
       { task_id: task.id, name },
     )
-    if (existing?.file) await rm(mediaPath(existing.file), { force: true })
-    const stored = await saveFile(
-      `tasks/${task.task_type}/${task.display}/${validFilename(name)}`,
-      file,
-    )
+    // 先写临时文件再 rename 覆盖：写失败时旧文件还在，并发上传同名文件也不会留下坏文件
+    const stored = `tasks/${task.task_type}/${task.display}/${name}`
+    const full = mediaPath(stored)
+    const tmp = `${full}.${crypto.randomUUID()}.uploading`
+    await mkdir(dirname(full), { recursive: true })
+    try {
+      await Bun.write(tmp, file)
+      await rename(tmp, full)
+    } finally {
+      await rm(tmp, { force: true })
+    }
     // 上面 await 期间可能有同名上传先写入了，用 upsert 而不是按 existing 选 INSERT / UPDATE
     run(
       `INSERT INTO task_taskasset (name, file, task_id) VALUES ($name, $file, $task_id)
        ON CONFLICT (task_id, name) DO UPDATE SET file = excluded.file`,
       { name, file: stored, task_id: task.id },
     )
+    // 旧数据里同名素材可能存在带随机后缀的文件
+    if (existing?.file && existing.file !== stored) await rm(mediaPath(existing.file), { force: true })
     return c.json(assetOut({ name, file: stored }))
   })
 
