@@ -226,6 +226,34 @@ describe("提交与删除", () => {
     expect(all(`SELECT * FROM prompt_message`)).toEqual([])
   })
 
+  test("保存手改 / 外部 AI 版本，交这一版时关联到它", async () => {
+    makeUser("stu")
+    const task = makeTask("T")
+    const stu = await client("stu")
+    const edit = await stu("POST", "/api/prompt/versions", { task_id: task, html: "<p>1", css: "", js: "" })
+    expect(edit.json.source).toBe("edit")
+    const ext = await stu("POST", "/api/prompt/versions", {
+      task_id: task,
+      html: "<p>2",
+      css: "",
+      js: "",
+      prompt: "用外部 AI 做的",
+    })
+    expect(ext.json.source).toBe("manual")
+    const history = await stu("GET", `/api/prompt/history/${task}`)
+    expect(history.json.map((h: any) => [h.source, h.prompt])).toEqual([
+      ["edit", "（手动修改了代码）"],
+      ["manual", "用外部 AI 做的"],
+    ])
+
+    const sub = await stu("POST", "/api/submission/", { task_id: task, html: "<p>1", message_id: edit.json.message_id })
+    const linked = get(`SELECT submission_id FROM prompt_message WHERE id = $id`, { id: edit.json.message_id })
+    expect(linked.submission_id).toBe(sub.json.id.replaceAll("-", ""))
+    // 同一个版本再交一次，更新原来的提交，不新建
+    await stu("POST", "/api/submission/", { task_id: task, html: "<p>1!", message_id: edit.json.message_id })
+    expect(all(`SELECT html FROM submission_submission`)).toEqual([{ html: "<p>1!" }])
+  })
+
   test("删除一轮对话：连带提问和关联提交；被评过分的不能删", async () => {
     makeUser("stu")
     makeUser("other")

@@ -395,6 +395,20 @@ export const Gradebook = {
 }
 
 export const Prompt = {
+  // 保存一个不是 AI 生成的版本：手改的代码，或者带提示词的外部 AI 代码
+  async saveVersion(
+    taskId: number,
+    code: { html: string; css: string; js: string },
+    prompt?: string,
+  ): Promise<{ message_id: number; user_message_id: number; source: string }> {
+    const res = await http.post("/prompt/versions", {
+      task_id: taskId,
+      ...code,
+      prompt: prompt || undefined,
+    })
+    return res.data
+  },
+
   async listConversations(taskId?: number, userId?: number) {
     const params: Record<string, number> = {}
     if (taskId) params.task_id = taskId

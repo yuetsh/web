@@ -18,8 +18,15 @@
         </button>
 
         <!-- User message -->
-        <div class="message user">
-          <div class="message-role">我</div>
+        <div v-if="pair.userMsg.source === 'edit'" class="message note">
+          你手动修改了代码
+        </div>
+        <div v-else class="message user">
+          <div class="message-role">
+            我<span v-if="pair.userMsg.source === 'manual'" class="role-tag">
+              用外部 AI</span
+            >
+          </div>
           <div
             class="message-content"
             v-html="renderContent(pair.userMsg)"
@@ -28,23 +35,16 @@
 
         <!-- Assistant message -->
         <div v-if="pair.assistantMsg" class="message assistant">
-          <div class="message-role">AI</div>
-          <div
-            class="message-content"
-            v-html="renderContent(pair.assistantMsg)"
-          ></div>
-          <div
-            v-if="allowSubmit && hasCode(pair.assistantMsg)"
-            class="message-actions"
-          >
-            <n-button
-              size="tiny"
-              :disabled="pair.assistantMsg.submitted"
-              :loading="submittingId === pair.assistantMsg.id"
-              @click="submitVersion(pair.assistantMsg)"
-            >
-              {{ pair.assistantMsg.submitted ? "已提交" : "提交此版本" }}
-            </n-button>
+          <template v-if="pair.assistantMsg.source === 'conversation' || !pair.assistantMsg.source">
+            <div class="message-role">AI</div>
+            <div
+              class="message-content"
+              v-html="renderContent(pair.assistantMsg)"
+            ></div>
+          </template>
+          <div v-if="versionOf(pair.assistantMsg)" class="version-line">
+            <span class="version-chip">v{{ versionOf(pair.assistantMsg) }}</span>
+            <span v-if="pair.assistantMsg.submitted">已提交</span>
           </div>
         </div>
       </div>
@@ -62,6 +62,7 @@
         ></div>
         <div class="streaming-hint">AI 正在生成中…</div>
       </div>
+      <RatingCard v-if="rating" :active="streaming" />
     </div>
     <GuidancePanel @generate="onGuidanceGenerate" />
     <div class="input-area">
@@ -80,18 +81,22 @@
           style="flex: 1; min-width: 0"
           @keydown.enter.exact.prevent="send"
         />
-        <n-button
-          secondary
-          :disabled="!input.trim() || !connected || !currentTaskId || streaming"
-          style="flex-shrink: 0"
-          title="调教提示词"
-          aria-label="调教提示词"
-          @click="startGuidance"
-        >
-          <template #icon>
-            <Icon icon="lucide:lightbulb" :width="16" />
+        <n-tooltip>
+          <template #trigger>
+            <n-button
+              secondary
+              :disabled="!input.trim() || !connected || !currentTaskId || streaming"
+              style="flex-shrink: 0"
+              @click="startGuidance"
+            >
+              <template #icon>
+                <Icon icon="lucide:lightbulb" :width="16" />
+              </template>
+              帮我写清楚
+            </n-button>
           </template>
-        </n-button>
+          AI 教练会问你几个问题，帮你把想要的效果描述清楚
+        </n-tooltip>
       </n-flex>
       <n-flex justify="flex-end" align="center" style="margin-top: 8px">
         <n-select
@@ -122,6 +127,7 @@ import { useStorage } from "@vueuse/core"
 import { useMessage } from "naive-ui"
 import { Icon } from "../../icons"
 import GuidancePanel from "./GuidancePanel.vue"
+import RatingCard from "../workbench/RatingCard.vue"
 import { openGuidance } from "../../store/guidance"
 import {
   messages,
@@ -132,14 +138,19 @@ import {
   stopPrompt,
   currentTaskId,
   removeMessagePair,
-  markMessageSubmitted,
+  type PromptMessage,
 } from "../../store/prompt"
-import { Prompt, Submission } from "../../api"
+import { Prompt } from "../../api"
 import { renderMarkdown } from "../../utils/markdown"
 
-const { allowSubmit = true } = defineProps<{ allowSubmit?: boolean }>()
+const props = defineProps<{
+  // 发送前调用：工作台用它把还没存的手改先存成版本，AI 才会在手改后的代码上继续改
+  beforeSend?: () => Promise<void>
+  // AI 生成时在对话里显示同学作品让学生打分（挑战页才有）
+  rating?: boolean
+}>()
 
-const emit = defineEmits<{ deleted: []; submitted: [] }>()
+const emit = defineEmits<{ deleted: [] }>()
 
 const input = ref("")
 const messagesRef = ref<HTMLElement>()
@@ -156,18 +167,11 @@ if (!modelOptions.some((o) => o.value === selectedModel.value)) {
 }
 
 // Group messages into user+assistant pairs
-const submittingId = ref<number | null>(null)
 
 const pairs = computed(() => {
   const result: Array<{
-    userMsg: { role: string; content: string; id?: number }
-    assistantMsg: {
-      role: string
-      content: string
-      id?: number
-      code?: any
-      submitted?: boolean
-    } | null
+    userMsg: PromptMessage
+    assistantMsg: PromptMessage | null
     index: number
   }> = []
   const msgs = messages.value
@@ -190,30 +194,17 @@ function hasCode(msg: { code?: any } | null): boolean {
   return !!(msg.code.html || msg.code.css || msg.code.js)
 }
 
-async function submitVersion(msg: {
-  id?: number
-  code?: { html: string | null; css: string | null; js: string | null }
-}) {
-  if (!msg.id || !msg.code || !currentTaskId.value) return
-  submittingId.value = msg.id
-  try {
-    await Submission.create(
-      currentTaskId.value,
-      {
-        html: msg.code.html ?? "",
-        css: msg.code.css ?? "",
-        js: msg.code.js ?? "",
-      },
-      msg.id,
-    )
-    markMessageSubmitted(msg.id)
-    naiveMessage.success("提交成功")
-    emit("submitted")
-  } catch {
-    naiveMessage.error("提交失败，请重试")
-  } finally {
-    submittingId.value = null
+// 带代码的 AI 回复就是一个版本，按出现顺序编号（和工作台底部的版本条一致）
+const versionNumbers = computed(() => {
+  const map = new Map<number, number>()
+  for (const m of messages.value) {
+    if (m.role === "assistant" && m.id && hasCode(m)) map.set(m.id, map.size + 1)
   }
+  return map
+})
+
+function versionOf(msg: { id?: number }) {
+  return msg.id ? versionNumbers.value.get(msg.id) : undefined
 }
 
 async function deletePair(assistantMsgId: number) {
@@ -227,11 +218,12 @@ async function deletePair(assistantMsgId: number) {
   }
 }
 
-function send() {
+async function send() {
   const text = input.value.trim()
   if (!text || streaming.value) return
-  sendPrompt(text, selectedModel.value)
   input.value = ""
+  await props.beforeSend?.()
+  sendPrompt(text, selectedModel.value)
 }
 
 function startGuidance() {
@@ -240,9 +232,10 @@ function startGuidance() {
   openGuidance(currentTaskId.value, text)
 }
 
-function onGuidanceGenerate(finalPrompt: string) {
-  sendPrompt(finalPrompt, selectedModel.value)
+async function onGuidanceGenerate(finalPrompt: string) {
   input.value = ""
+  await props.beforeSend?.()
+  sendPrompt(finalPrompt, selectedModel.value)
 }
 
 function renderContent(msg: { role: string; content: string }): string {
@@ -295,6 +288,36 @@ watch([() => messages.value.length, streamingContent], () => {
 .message-content {
   font-size: 14px;
   line-height: 1.6;
+}
+
+/* 手改代码这类不是对话的一行说明 */
+.message.note {
+  font-size: 12px;
+  color: var(--wp-muted);
+  text-align: center;
+}
+
+.role-tag {
+  margin-left: 6px;
+  font-weight: normal;
+  color: var(--wp-muted);
+}
+
+.version-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--wp-muted);
+}
+
+.version-chip {
+  padding: 0 7px;
+  border: 1px solid var(--wp-brand);
+  border-radius: 4px;
+  color: var(--wp-brand);
+  font: 600 12px/18px var(--wp-font-mono);
 }
 
 .message-content :deep(pre) {

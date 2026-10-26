@@ -39,7 +39,7 @@ async function callLlm(content: string): Promise<number | null> {
 
 export async function classifyMessage(messageId: number): Promise<number | null> {
   const msg = get<{ content: string }>(
-    `SELECT content FROM prompt_message WHERE id = $id AND role = 'user'`,
+    `SELECT content FROM prompt_message WHERE id = $id AND role = 'user' AND source != 'edit'`,
     { id: messageId },
   )
   if (!msg) return null
@@ -56,7 +56,7 @@ export async function classifyMessage(messageId: number): Promise<number | null>
 export async function classifyConversationMessages(conversationId: string, force = false) {
   const rows = all<{ id: number }>(
     `SELECT id FROM prompt_message
-     WHERE conversation_id = $id AND role = 'user' ${force ? "" : "AND prompt_level IS NULL"}
+     WHERE conversation_id = $id AND role = 'user' AND source != 'edit' ${force ? "" : "AND prompt_level IS NULL"}
      ORDER BY created, id`,
     { id: conversationId },
   )

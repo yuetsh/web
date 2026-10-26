@@ -160,9 +160,7 @@
                       fontWeight: 500,
                       whiteSpace: 'nowrap',
                     }"
-                    >{{
-                      round.source === "conversation" ? "对话" : "手动"
-                    }}</span
+                    >{{ sourceLabel(round.source) }}</span
                   >
                   <span
                     v-if="round.prompt_level"
@@ -241,6 +239,7 @@ import { computed, ref, watch } from "vue"
 import { NPopconfirm, NButton, useMessage } from "naive-ui"
 import { Icon } from "../../icons"
 import { renderMarkdown } from "../../utils/markdown"
+import { sourceLabel } from "../../utils/helper"
 import { storageShim } from "../../utils/previewStorage"
 import { Prompt, Submission } from "../../api"
 import type { PromptRound } from "../../utils/type"

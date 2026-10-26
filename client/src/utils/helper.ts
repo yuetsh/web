@@ -16,3 +16,10 @@ export function goHome(router: any, type: TASK_TYPE, display: number) {
     router.push({ name: "home" })
   }
 }
+
+// 一轮对话 / 一个版本是怎么来的
+export function sourceLabel(source: string | null | undefined) {
+  if (source === "edit") return "手改"
+  if (source === "manual") return "外部 AI"
+  return "AI 对话"
+}

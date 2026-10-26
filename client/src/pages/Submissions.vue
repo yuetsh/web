@@ -103,6 +103,7 @@ import { Submission } from "../api"
 import type { SubmissionOut, FlagType } from "../utils/type"
 import { parseTime } from "../utils/helper"
 import { goHome } from "../utils/helper"
+import { saveTaskCode } from "../composables/useTaskCode"
 import { TASK_TYPE } from "../utils/const"
 import { watchDebounced } from "@vueuse/core"
 import { useRouter, useRoute } from "vue-router"
@@ -368,9 +369,15 @@ function afterScore() {
 }
 
 function copyToEditor() {
-  eHtml.value = html.value
-  eCss.value = css.value
-  eJs.value = js.value
+  const code = { html: html.value, css: css.value, js: js.value }
+  // 挑战页按任务各存一份代码，教程页还是共用编辑器
+  if (submission.value.task_type === TASK_TYPE.Challenge) {
+    saveTaskCode(submission.value.task_id, code)
+  } else {
+    eHtml.value = code.html
+    eCss.value = code.css
+    eJs.value = code.js
+  }
   goHome(router, submission.value.task_type, submission.value.task_display)
 }
 

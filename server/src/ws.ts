@@ -1,7 +1,12 @@
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun"
 import { all, get, run, iso, uuidOut } from "./db"
 import { userFromAccessToken, type User } from "./auth"
-import { canAccessTask, getOrCreateActiveConversation, insertMessage } from "./services/prompt"
+import {
+  canAccessTask,
+  codeAsMarkdown,
+  getOrCreateActiveConversation,
+  insertMessage,
+} from "./services/prompt"
 import {
   extractCode,
   parseGuidanceResponse,
@@ -80,6 +85,7 @@ function conversationHistory(conversationId: string) {
   return all<{
     id: number
     role: string
+    source: string
     content: string
     code_html: string | null
     code_css: string | null
@@ -87,8 +93,9 @@ function conversationHistory(conversationId: string) {
     submission_id: string | null
     created: string
   }>(
-    `SELECT id, role, content, code_html, code_css, code_js, submission_id, created
-     FROM prompt_message WHERE conversation_id = $id AND source = 'conversation'
+    // 除了 AI 对话，还有学生手改（edit）和粘贴外部 AI 代码（manual）的版本；引导对话（guidance）不算
+    `SELECT id, role, source, content, code_html, code_css, code_js, submission_id, created
+     FROM prompt_message WHERE conversation_id = $id AND source IN ('conversation', 'edit', 'manual')
      ORDER BY created, id`,
     { id: conversationId },
   )
@@ -117,7 +124,8 @@ async function handlePrompt(ws: WS, data: any) {
   try {
     const history: ChatMessage[] = conversationHistory(ws.data.conversationId).map((m) => ({
       role: m.role as ChatMessage["role"],
-      content: m.content,
+      // 以前“手动提交”存的 AI 回复正文是空的，代码只在 code_* 里
+      content: m.role === "assistant" && !m.content ? codeAsMarkdown(m) : m.content,
     }))
     let full: string
     try {
@@ -211,6 +219,7 @@ export const websocket: WebSocketHandler<WsData> = {
       messages: conversationHistory(d.conversationId).map((m) => ({
         id: m.id,
         role: m.role,
+        source: m.source,
         content: m.content,
         code:
           m.role === "assistant" ? { html: m.code_html, css: m.code_css, js: m.code_js } : null,

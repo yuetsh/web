@@ -8,9 +8,12 @@ import { client, freshDb, makeTask, makeUser } from "./helpers"
 
 // 假的模型接口：每段之间停一下，方便测试中途断开
 const PIECES = ["好的", "```html\n<p>hi</p>\n```"]
+// 最近一次发给模型的请求
+let lastRequest: any = null
 const llm = Bun.serve({
   port: 0,
-  fetch() {
+  async fetch(req) {
+    lastRequest = await req.json()
     const enc = new TextEncoder()
     const stream = new ReadableStream({
       async start(ctrl) {
@@ -124,6 +127,34 @@ describe("WebSocket 代码生成", () => {
     c.ws.close()
     await Bun.sleep(400)
     expect(all(`SELECT * FROM prompt_message`)).toEqual([])
+  })
+
+  test("手改的版本进入对话，AI 下一轮在它上面改", async () => {
+    makeUser("stu")
+    const task = makeTask("挑战")
+    const stu = await client("stu")
+    const c = (await connect(`/ws/prompt/${task}/?token=${stu.tokens.access_token}`))!
+    await c.next("init")
+    c.ws.send(JSON.stringify({ type: "message", content: "做个页面" }))
+    await c.next("complete")
+
+    const saved = await stu("POST", "/api/prompt/versions", {
+      task_id: task,
+      html: "<p>我改过的</p>",
+      css: "p { color: red }",
+      js: "",
+    })
+    expect(saved.json.source).toBe("edit")
+
+    c.ws.send(JSON.stringify({ type: "message", content: "再加个按钮" }))
+    await c.next("complete")
+    const sent = lastRequest.messages.map((m: any) => `${m.role}:${m.content}`)
+    // system、第一轮、手改那一轮、这一轮的提问
+    expect(sent.at(-3)).toBe("user:（手动修改了代码）")
+    expect(sent.at(-2)).toContain("<p>我改过的</p>")
+    expect(sent.at(-2)).toContain("p { color: red }")
+    expect(sent.at(-1)).toBe("user:再加个按钮")
+    c.ws.close()
   })
 
   test("token 无效或任务不存在时握手失败", async () => {

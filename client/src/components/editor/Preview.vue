@@ -1,7 +1,7 @@
 <template>
   <n-flex align="center" justify="space-between" class="title">
     <div>
-      <n-text class="titleText">预览</n-text>
+      <slot name="title"><n-text class="titleText">预览</n-text></slot>
       <n-text v-if="!!submission.id" depth="3">
         ({{ submission.view_count || 0 }})
       </n-text>
@@ -214,9 +214,11 @@ onUnmounted(listenPreviewStorage(window, () => frame.value, storageScope))
 <style scoped>
 .title {
   height: 43px;
-  padding: 0 20px;
-  border-bottom: 1px solid rgb(239, 239, 245);
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid var(--wp-line);
+  background: var(--wp-surface);
   box-sizing: border-box;
+  flex-wrap: nowrap !important;
 }
 
 .titleText {
@@ -225,7 +227,8 @@ onUnmounted(listenPreviewStorage(window, () => frame.value, storageScope))
 
 .iframe-wrapper {
   width: 100%;
-  height: 100%;
+  /* 减去上面标题栏的高度，否则底部 43px 会被裁掉 */
+  height: calc(100% - 43px);
   margin: 0 auto;
   transition: max-width 0.3s ease;
   overflow: hidden;

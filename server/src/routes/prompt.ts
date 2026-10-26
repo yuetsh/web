@@ -2,14 +2,22 @@ import { Hono } from "hono"
 import { z } from "zod"
 import { all, get, tx, iso, uuidOut } from "../db"
 import { Role, isStaff, requireUser } from "../auth"
-import { HttpError, ValidationError, intParam, orNotFound, qs, query, uuidParam, type Env } from "../http"
+import { HttpError, ValidationError, body, intParam, orNotFound, qs, query, uuidParam, type Env } from "../http"
 import { deleteRound, hasRatingsOrAwards } from "../services/cascade"
 import {
   classifyConversationMessages,
+  classifyMessage,
   classifyMessagesBatch,
   inBackground,
 } from "../services/classifier"
-import type { MessageRow } from "../services/prompt"
+import {
+  EDIT_PROMPT,
+  canAccessTask,
+  codeAsMarkdown,
+  getOrCreateActiveConversation,
+  insertMessage,
+  type MessageRow,
+} from "../services/prompt"
 
 const router = new Hono<Env>()
 
@@ -133,6 +141,45 @@ router.get("/history/:task_id", (c) => {
 })
 
 // 对一个对话里的用户消息做层级分类（管理员，后台执行）
+// 保存一个不是 AI 生成的版本：学生手改的代码（source=edit），或者粘贴外部 AI 的代码（source=manual，带提示词）。
+// 存成一问一答放进当前对话，版本条和提示词链里都能看到；之后接着和 AI 对话，AI 也是在这份代码上改
+router.post("/versions", async (c) => {
+  const user = requireUser(c)
+  const p = await body(
+    c,
+    z.object({
+      task_id: z.number().int(),
+      html: z.string(),
+      css: z.string(),
+      js: z.string(),
+      prompt: z.string().trim().max(5000).optional(),
+    }),
+  )
+  orNotFound(get(`SELECT 1 FROM task_task WHERE id = $id`, { id: p.task_id }), "任务不存在")
+  if (!canAccessTask(user, p.task_id)) throw new HttpError(403, "没有权限")
+  const source = p.prompt ? "manual" : "edit"
+  const code = { code_html: p.html, code_css: p.css, code_js: p.js }
+  const ids = tx(() => {
+    const convId = getOrCreateActiveConversation(user.id, p.task_id)
+    const userMessageId = insertMessage({
+      conversation_id: convId,
+      role: "user",
+      content: p.prompt || EDIT_PROMPT,
+      source,
+    })
+    const messageId = insertMessage({
+      conversation_id: convId,
+      role: "assistant",
+      content: codeAsMarkdown(code),
+      source,
+      ...code,
+    })
+    return { userMessageId, messageId }
+  })
+  if (p.prompt) inBackground(classifyMessage(ids.userMessageId))
+  return c.json({ message_id: ids.messageId, user_message_id: ids.userMessageId, source })
+})
+
 router.post("/conversations/:conversation_id/classify", (c) => {
   const user = requireUser(c)
   if (!isStaff(user)) throw new HttpError(403, "没有权限")
@@ -151,7 +198,7 @@ router.post("/classify-batch", (c) => {
     c,
     z.object({ task_id: qs.opt(qs.int), force: qs.opt(qs.bool).default(false) }),
   )
-  const where = ["m.role = 'user'"]
+  const where = ["m.role = 'user'", "m.source != 'edit'"]
   const params: Record<string, unknown> = {}
   if (q.task_id) {
     where.push("c.task_id = $task_id")

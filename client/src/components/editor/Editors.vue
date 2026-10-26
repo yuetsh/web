@@ -70,6 +70,7 @@ import Editor from "./Editor.vue"
 import Toolbar from "./Toolbar.vue"
 import { html, css, js, tab, size, reset } from "../../store/editors"
 import { taskId } from "../../store/task"
+import { formatCode } from "../../utils/code"
 import { Submission } from "../../api"
 import { NCode, useDialog, useMessage } from "naive-ui"
 import { h, ref } from "vue"
@@ -86,43 +87,16 @@ function changeSize(num: number) {
   size.value = num
 }
 
-async function formatCode() {
-  // prettier 加上各语言插件近 1MB，只在点“格式化”时才加载
-  const [prettier, htmlParser, cssParser, babelParser, estreeParser] =
-    await Promise.all([
-      import("prettier/standalone"),
-      import("prettier/parser-html"),
-      import("prettier/parser-postcss"),
-      import("prettier/parser-babel"),
-      import("prettier/plugins/estree"),
-    ])
-  const [htmlFormatted, cssFormatted, jsFormatted] = await Promise.all([
-    prettier.format(html.value, {
-      parser: "html",
-      //@ts-ignore
-      plugins: [htmlParser, babelParser, estreeParser, cssParser],
-      tabWidth: 4,
-    }),
-    prettier.format(css.value, {
-      parser: "css",
-      plugins: [cssParser],
-      tabWidth: 4,
-    }),
-    prettier.format(js.value, {
-      parser: "babel",
-      //@ts-ignore
-      plugins: [babelParser, estreeParser],
-      tabWidth: 2,
-    }),
-  ])
-  html.value = htmlFormatted
-  css.value = cssFormatted
-  js.value = jsFormatted
+async function formatEditors() {
+  const out = await formatCode({ html: html.value, css: css.value, js: js.value })
+  html.value = out.html
+  css.value = out.css
+  js.value = out.js
 }
 
 async function format() {
   try {
-    await formatCode()
+    await formatEditors()
   } catch (err: any) {
     dialog.error({
       title: "格式化失败",
@@ -148,7 +122,7 @@ async function doSubmit() {
 async function formatAndSubmit() {
   submitLoading.value = true
   try {
-    await formatCode()
+    await formatEditors()
     await doSubmit()
   } catch (err: any) {
     dialog.warning({
@@ -180,41 +154,6 @@ async function formatAndSubmit() {
   font-size: 16px;
 }
 
-/* HTML / CSS / JS 各有固定颜色，见 theme.ts */
-.lang-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--wp-font-mono);
-  font-weight: 600;
-  font-size: 13px;
-}
-.lang-tab.lang-html::before,
-.lang-tab.lang-css::before,
-.lang-tab.lang-js::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.lang-html {
-  color: var(--wp-html);
-}
-.lang-html::before {
-  background: var(--wp-html);
-}
-.lang-css {
-  color: var(--wp-css);
-}
-.lang-css::before {
-  background: var(--wp-css);
-}
-.lang-js {
-  color: var(--wp-js);
-}
-.lang-js::before {
-  background: var(--wp-js);
-}
 
 :deep(.n-tabs-nav .n-tabs-tab[data-name="html"]) {
   background-color: var(--wp-html-soft) !important;

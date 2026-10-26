@@ -46,3 +46,39 @@ samp {
 iframe {
   background: #fff;
 }
+
+/* HTML / CSS / JS 各有固定颜色，见 theme.ts */
+.lang-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--wp-font-mono);
+  font-weight: 600;
+  font-size: 13px;
+}
+.lang-tab.lang-html::before,
+.lang-tab.lang-css::before,
+.lang-tab.lang-js::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.lang-html {
+  color: var(--wp-html);
+}
+.lang-html::before {
+  background: var(--wp-html);
+}
+.lang-css {
+  color: var(--wp-css);
+}
+.lang-css::before {
+  background: var(--wp-css);
+}
+.lang-js {
+  color: var(--wp-js);
+}
+.lang-js::before {
+  background: var(--wp-js);
+}

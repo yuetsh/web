@@ -81,6 +81,23 @@ export function insertMessage(m: {
   return Number(res.lastInsertRowid)
 }
 
+// 不是 AI 生成的版本（手改 / 粘贴外部 AI 的代码），AI 回复那一条的正文写成和 AI 输出一样的代码块，
+// 后面接着和 AI 对话时，它在上下文里看到的就是这份代码
+export const EDIT_PROMPT = "（手动修改了代码）"
+
+export function codeAsMarkdown(code: {
+  code_html: string | null
+  code_css: string | null
+  code_js: string | null
+}) {
+  const parts = [
+    code.code_css ? `<style>\n${code.code_css}\n</style>` : "",
+    code.code_html ?? "",
+    code.code_js ? `<script>\n${code.code_js}\n</script>` : "",
+  ].filter(Boolean)
+  return "```html\n" + parts.join("\n\n") + "\n```"
+}
+
 export function getPrecedingUserMessage(asst: Pick<MessageRow, "id" | "conversation_id" | "created">) {
   return get<MessageRow>(
     `SELECT * FROM prompt_message

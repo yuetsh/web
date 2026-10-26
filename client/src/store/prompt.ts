@@ -1,6 +1,5 @@
 import { ref } from "vue"
 import { ReconnectingSocket } from "../utils/socket"
-import { html, css, js } from "./editors"
 
 export interface PromptMessage {
   role: "user" | "assistant"
@@ -9,7 +8,11 @@ export interface PromptMessage {
   code?: { html: string | null; css: string | null; js: string | null }
   submitted?: boolean  // whether this assistant message's code has been submitted
   created?: string
+  // conversation：AI 对话；edit：学生手改；manual：粘贴外部 AI 的代码
+  source?: string
 }
+
+type CodeOut = { html: string | null; css: string | null; js: string | null }
 
 export const messages = ref<PromptMessage[]>([])
 export const conversationId = ref<string>("")
@@ -17,15 +20,13 @@ export const connected = ref(false)
 export const streaming = ref(false)
 export const streamingContent = ref("")
 export const currentTaskId = ref(0)
-let _onCodeComplete:
-  | ((
-      code: { html: string | null; css: string | null; js: string | null },
-      messageId: number
-    ) => void)
+// 新代码交给工作台处理：init 是连上时对话里最新的那一版，complete 是 AI 刚生成的
+let _codeSink:
+  | ((code: CodeOut, messageId: number, reason: "init" | "complete") => void)
   | null = null
 
-export function setOnCodeComplete(fn: typeof _onCodeComplete) {
-  _onCodeComplete = fn
+export function setCodeSink(fn: typeof _codeSink) {
+  _codeSink = fn
 }
 
 function onMessage(data: any) {
@@ -39,8 +40,8 @@ function onMessage(data: any) {
       const lastAssistant = [...messages.value]
         .reverse()
         .find((m) => m.role === "assistant" && m.code)
-      if (lastAssistant?.code) {
-        applyCode(lastAssistant.code)
+      if (lastAssistant?.code && lastAssistant.id) {
+        _codeSink?.(lastAssistant.code, lastAssistant.id, "init")
       }
     }
   } else if (data.type === "stream") {
@@ -54,14 +55,10 @@ function onMessage(data: any) {
       id: data.message_id,
       code: data.code,
       submitted: false,
+      source: "conversation",
     })
     streamingContent.value = ""
-    if (data.code) {
-      applyCode(data.code)
-      if (_onCodeComplete) {
-        _onCodeComplete(data.code, data.message_id)
-      }
-    }
+    if (data.code) _codeSink?.(data.code, data.message_id, "complete")
   } else if (data.type === "error") {
     streaming.value = false
     streamingContent.value = ""
@@ -103,7 +100,7 @@ export function disconnectPrompt() {
   streaming.value = false
   streamingContent.value = ""
   currentTaskId.value = 0
-  _onCodeComplete = null
+  _codeSink = null
 }
 
 export function sendPrompt(content: string, model: string = "") {
@@ -130,6 +127,19 @@ export function stopPrompt() {
   }
 }
 
+// 手改或粘贴外部代码存成版本后，把这一问一答加到当前对话里显示
+export function addVersionPair(
+  prompt: string,
+  source: string,
+  messageId: number,
+  code: CodeOut,
+) {
+  messages.value.push(
+    { role: "user", content: prompt, source },
+    { role: "assistant", content: "", id: messageId, code, submitted: false, source },
+  )
+}
+
 export function markMessageSubmitted(assistantMsgId: number) {
   const msg = messages.value.find((m) => m.id === assistantMsgId)
   if (msg) msg.submitted = true
@@ -140,14 +150,4 @@ export function removeMessagePair(assistantMsgId: number) {
   if (idx >= 1) {
     messages.value.splice(idx - 1, 2)
   }
-}
-
-function applyCode(code: {
-  html: string | null
-  css: string | null
-  js: string | null
-}) {
-  if (code.html !== null) html.value = code.html
-  if (code.css !== null) css.value = code.css
-  if (code.js !== null) js.value = code.js
 }

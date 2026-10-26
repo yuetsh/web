@@ -18,7 +18,7 @@ const { values } = parseArgs({
   },
 })
 
-const where = ["m.role = 'user'"]
+const where = ["m.role = 'user'", "m.source != 'edit'"]
 const params: Record<string, unknown> = {}
 if (values["task-id"]) {
   where.push("c.task_id = $task_id")

@@ -70,9 +70,9 @@
               </n-tag>
               <n-tag
                 size="small"
-                :type="item.source === 'manual' ? 'info' : 'success'"
+                :type="item.source === 'edit' ? 'warning' : item.source === 'manual' ? 'info' : 'success'"
               >
-                {{ item.source === "manual" ? "手动提交" : "AI 对话" }}
+                {{ sourceLabel(item.source) }}
               </n-tag>
             </n-flex>
             <n-flex align="center" :wrap="false" :size="4">
@@ -133,6 +133,7 @@ import { onMounted, ref, watch } from "vue"
 import { Icon } from "../../icons"
 import { useMessage } from "naive-ui"
 import { renderMarkdown } from "../../utils/markdown"
+import { sourceLabel } from "../../utils/helper"
 import { Prompt } from "../../api"
 import type { PromptHistoryItem } from "../../utils/type"
 import { parseTime } from "../../utils/helper"
