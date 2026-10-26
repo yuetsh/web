@@ -43,6 +43,7 @@
   </n-flex>
   <div class="iframe-wrapper" :style="iframeWrapperStyle">
     <iframe
+      ref="frame"
       class="iframe"
       :sandbox="PREVIEW_SANDBOX"
       :srcdoc="previewContent"
@@ -51,7 +52,7 @@
 </template>
 <script lang="ts" setup>
 import { watchDebounced } from "@vueuse/core"
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue"
 import { useRouter } from "vue-router"
 import { Submission } from "../../api"
 import { submission } from "../../store/submission"
@@ -62,6 +63,12 @@ import {
   buildPreviewDocument,
   PREVIEW_SANDBOX,
 } from "../../utils/previewDocument"
+import {
+  listenPreviewStorage,
+  loadPreviewStorage,
+} from "../../utils/previewStorage"
+import { taskId } from "../../store/task"
+import { user } from "../../store/user"
 
 interface Props {
   html: string
@@ -71,6 +78,8 @@ interface Props {
   submissionId?: string
   showCodeButton?: boolean
   clearable?: boolean
+  // 自己的编辑器：代码里的 localStorage 按“用户 + 任务”存下来，刷新后还在
+  persistStorage?: boolean
 }
 
 const props = defineProps<Props>()
@@ -118,12 +127,18 @@ const router = useRouter()
 const showDL = computed(() => props.html || props.css || props.js)
 const previewContent = ref("")
 
-function getContent() {
+const frame = useTemplateRef<HTMLIFrameElement>("frame")
+const storageScope = () =>
+  props.persistStorage && taskId.value ? `${user.username}:${taskId.value}` : ""
+
+function getContent(forDownload = false) {
+  const scope = storageScope()
   return buildPreviewDocument({
     html: props.html,
     css: props.css,
     js: props.js,
     assetBaseUrl: props.assetBaseUrl,
+    storage: forDownload ? false : scope ? loadPreviewStorage(scope) : undefined,
   })
 }
 
@@ -132,7 +147,7 @@ function preview() {
 }
 
 function download() {
-  const content = getContent()
+  const content = getContent(true)
   const blob = new Blob([content], { type: "text/html" })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
@@ -159,7 +174,10 @@ function open() {
       `<!DOCTYPE html><title>预览</title><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;display:block}</style><iframe sandbox="${PREVIEW_SANDBOX}"></iframe>`,
     )
     doc.close()
-    doc.querySelector("iframe")!.srcdoc = getContent()
+    const tabFrame = doc.querySelector("iframe")!
+    // 全屏页里的写入也存到同一个地方
+    listenPreviewStorage(newTab, () => tabFrame, storageScope)
+    tabFrame.srcdoc = getContent()
   }
 }
 
@@ -192,6 +210,7 @@ watchDebounced(
   },
 )
 onMounted(preview)
+onUnmounted(listenPreviewStorage(window, () => frame.value, storageScope))
 </script>
 <style scoped>
 .title {

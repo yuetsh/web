@@ -14,6 +14,7 @@
             :css="css"
             :js="js"
             :asset-base-url="assetBaseUrl"
+            persist-storage
           />
         </template>
       </n-split>

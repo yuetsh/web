@@ -241,6 +241,7 @@ import { computed, ref, watch } from "vue"
 import { NPopconfirm, NButton, useMessage } from "naive-ui"
 import { Icon } from "@iconify/vue"
 import { renderMarkdown } from "../../utils/markdown"
+import { storageShim } from "../../utils/previewStorage"
 import { Prompt, Submission } from "../../api"
 import type { PromptRound } from "../../utils/type"
 import { user, roleSuper } from "../../store/user"
@@ -298,7 +299,7 @@ const selectedPageHtml = computed(() => {
   if (!round?.html) return null
   const style = round.css ? `<style>${round.css}</style>` : ""
   const script = round.js ? `<script>${round.js}<\/script>` : ""
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">${style}</head><body>${round.html}${script}</body></html>`
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">${storageShim()}${style}</head><body>${round.html}${script}</body></html>`
 })
 
 function isPromptLong(text: string): boolean {

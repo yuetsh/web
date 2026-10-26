@@ -80,6 +80,7 @@
         :html="html"
         :css="css"
         :js="js"
+        persist-storage
         show-code-button
         clearable
         @showCode="showCode = true"

@@ -78,6 +78,7 @@
 </template>
 
 <script setup lang="ts">
+import { storageShim } from "../utils/previewStorage"
 import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import { Icon } from "@iconify/vue"
@@ -91,7 +92,7 @@ const awards = ref<AwardSection[]>([])
 function buildSrcdoc(item: ShowcaseItem): string {
   const css = item.css ? `<style>${item.css}</style>` : ""
   const js = item.js ? `<script>${item.js}<\/script>` : ""
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="/normalize.min.css" />${css}</head><body>${item.html ?? ""}${js}</body></html>`
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">${storageShim()}<meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="/normalize.min.css" />${css}</head><body>${item.html ?? ""}${js}</body></html>`
 }
 
 function openDetail(item: ShowcaseItem) {
