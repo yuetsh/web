@@ -90,7 +90,7 @@
         :css="css"
         :js="js"
         :asset-base-url="assetBaseUrl"
-        persist-storage
+        :storage-task-id="taskId"
         show-code-button
         clearable
         @showCode="showCode = true"

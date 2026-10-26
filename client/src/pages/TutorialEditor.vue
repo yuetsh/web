@@ -192,7 +192,7 @@ async function getContent() {
 }
 
 function createNew() {
-  tutorial.display = list.value[list.value.length - 1]?.display ?? 0 + 1
+  tutorial.display = (list.value[list.value.length - 1]?.display ?? 0) + 1
   tutorial.title = ""
   tutorial.content = ""
   tutorial.is_public = false

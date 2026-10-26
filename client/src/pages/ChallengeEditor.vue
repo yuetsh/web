@@ -224,7 +224,7 @@ async function getContent() {
 }
 
 function createNew() {
-  challenge.display = list.value[list.value.length - 1]?.display ?? 0 + 1
+  challenge.display = (list.value[list.value.length - 1]?.display ?? 0) + 1
   challenge.title = ""
   challenge.content = ""
   challenge.score = 0

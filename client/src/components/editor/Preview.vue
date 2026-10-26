@@ -67,7 +67,6 @@ import {
   listenPreviewStorage,
   loadPreviewStorage,
 } from "../../utils/previewStorage"
-import { taskId } from "../../store/task"
 import { user } from "../../store/user"
 
 interface Props {
@@ -78,8 +77,8 @@ interface Props {
   submissionId?: string
   showCodeButton?: boolean
   clearable?: boolean
-  // 自己的编辑器：代码里的 localStorage 按“用户 + 任务”存下来，刷新后还在
-  persistStorage?: boolean
+  // 自己的编辑器传当前任务 id：代码里的 localStorage 按“用户 + 任务”存下来，刷新后还在
+  storageTaskId?: number
 }
 
 const props = defineProps<Props>()
@@ -129,7 +128,7 @@ const previewContent = ref("")
 
 const frame = useTemplateRef<HTMLIFrameElement>("frame")
 const storageScope = () =>
-  props.persistStorage && taskId.value ? `${user.username}:${taskId.value}` : ""
+  props.storageTaskId ? `${user.username}:${props.storageTaskId}` : ""
 
 function getContent(forDownload = false) {
   const scope = storageScope()

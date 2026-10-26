@@ -14,7 +14,7 @@
             :css="css"
             :js="js"
             :asset-base-url="assetBaseUrl"
-            persist-storage
+            :storage-task-id="taskId"
           />
         </template>
       </n-split>
@@ -28,7 +28,7 @@ import Preview from "../components/editor/Preview.vue"
 import TaskPanel from "../components/task/TaskPanel.vue"
 import { show, panelSize } from "../store/panel"
 import { html, css, js } from "../store/editors"
-import { assetBaseUrl } from "../store/task"
+import { assetBaseUrl, taskId } from "../store/task"
 
 const { ctrl_s } = useMagicKeys({
   passive: false,
