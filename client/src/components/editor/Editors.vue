@@ -79,11 +79,6 @@
 </template>
 <script lang="ts" setup>
 import { Icon } from "@iconify/vue"
-import prettier from "prettier/standalone"
-import * as htmlParser from "prettier/parser-html"
-import * as cssParser from "prettier/parser-postcss"
-import * as babelParser from "prettier/parser-babel"
-import * as estreeParser from "prettier/plugins/estree"
 import Editor from "./Editor.vue"
 import Toolbar from "./Toolbar.vue"
 import { html, css, js, tab, size, reset } from "../../store/editors"
@@ -105,6 +100,15 @@ function changeSize(num: number) {
 }
 
 async function formatCode() {
+  // prettier 加上各语言插件近 1MB，只在点“格式化”时才加载
+  const [prettier, htmlParser, cssParser, babelParser, estreeParser] =
+    await Promise.all([
+      import("prettier/standalone"),
+      import("prettier/parser-html"),
+      import("prettier/parser-postcss"),
+      import("prettier/parser-babel"),
+      import("prettier/plugins/estree"),
+    ])
   const [htmlFormatted, cssFormatted, jsFormatted] = await Promise.all([
     prettier.format(html.value, {
       parser: "html",

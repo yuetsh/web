@@ -13,7 +13,7 @@ import {
   requireUser,
   setPassword,
 } from "../auth"
-import { HttpError, body, bool, intParam, orNotFound, pageQuery, pageWindow, query, type Env } from "../http"
+import { HttpError, body, bool, intParam, orNotFound, pageQuery, pageWindow, query, type Ctx, type Env } from "../http"
 
 const router = new Hono<Env>()
 
@@ -54,10 +54,45 @@ async function insertUser(u: {
 const userExists = (username: string) =>
   !!get(`SELECT 1 FROM account_user WHERE username = $username`, { username })
 
+// 登录失败次数限制（进程内存里计数）：同一用户名 10 分钟内失败 10 次、同一 IP 失败 100 次后暂停登录。
+// 机房的电脑共用一个出口 IP，IP 的阈值要放宽，主要防的是对单个账号猜密码
+const LOGIN_WINDOW_MS = 10 * 60_000
+const MAX_FAILS_PER_USER = 10
+const MAX_FAILS_PER_IP = 100
+const loginFailures = new Map<string, { n: number; reset: number }>()
+
+const failCount = (key: string) => {
+  const f = loginFailures.get(key)
+  return f && f.reset > Date.now() ? f.n : 0
+}
+function recordFailure(key: string) {
+  const now = Date.now()
+  const f = loginFailures.get(key)
+  if (f && f.reset > now) f.n++
+  else loginFailures.set(key, { n: 1, reset: now + LOGIN_WINDOW_MS })
+}
+setInterval(() => {
+  const now = Date.now()
+  for (const [k, f] of loginFailures) if (f.reset <= now) loginFailures.delete(k)
+}, LOGIN_WINDOW_MS).unref()
+
+// 生产环境经过 Caddy，它会把 X-Forwarded-For 设成真实的客户端地址
+const clientIp = (c: Ctx) => c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "local"
+
 router.post("/login", async (c) => {
   const payload = await body(c, z.object({ username: z.string(), password: z.string() }))
+  const userKey = `user:${payload.username}`
+  const ipKey = `ip:${clientIp(c)}`
+  if (failCount(userKey) >= MAX_FAILS_PER_USER || failCount(ipKey) >= MAX_FAILS_PER_IP) {
+    throw new HttpError(429, "登录失败次数太多，请 10 分钟后再试")
+  }
   const user = await authenticate(payload.username, payload.password)
-  if (!user) throw new HttpError(401, "账号密码错误")
+  if (!user) {
+    recordFailure(userKey)
+    recordFailure(ipKey)
+    throw new HttpError(401, "账号密码错误")
+  }
+  loginFailures.delete(userKey)
   return c.json({ username: user.username, role: user.role, ...(await issueTokens(user)) })
 })
 

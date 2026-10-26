@@ -39,6 +39,7 @@
               <iframe
                 :srcdoc="buildSrcdoc(item)"
                 sandbox="allow-scripts"
+                loading="lazy"
                 scrolling="no"
                 class="preview-iframe"
               />

@@ -314,18 +314,30 @@ router.get("/random-for-rating", (c) => {
   }
   if (user.role === Role.NORMAL && todayRatingCount(user.id) >= 30) return c.json(null)
 
-  // 只在索引上随机挑出 rowid，再读这一行的代码；否则每个候选都要读一遍 html/css/js
-  const base = `SELECT s.rowid AS rid FROM submission_submission s
-    WHERE s.user_id != $me
+  const cond = `s.user_id != $me
       AND NOT EXISTS (SELECT 1 FROM submission_rating r WHERE r.submission_id = s.id AND r.user_id = $me)
       ${excludeId ? "AND s.id != $exclude" : ""}`
   const params = { me: user.id, ...(excludeId ? { exclude: excludeId } : {}) }
-  const picked =
-    get<{ rid: number }>(
-      `${base} AND (SELECT COUNT(*) FROM submission_rating r WHERE r.submission_id = s.id) < 5
+  const fewRatings = `(SELECT COUNT(*) FROM submission_rating r WHERE r.submission_id = s.id) < 5`
+  // 每个学生生成代码时都会调这个接口，ORDER BY RANDOM() 要把所有提交过一遍（6 万条约 50ms，期间整个服务都卡住）。
+  // 先随机抽几十个 rowid 试试，抽到评分少于 5 个的就用；抽不中再退回全表随机
+  const maxRowid = get<{ m: number | null }>(`SELECT MAX(rowid) AS m FROM submission_submission`)!.m ?? 0
+  let picked: { rid: number } | null = null
+  for (let round = 0; round < 3 && maxRowid && !picked; round++) {
+    const sample = Array.from({ length: 64 }, () => 1 + Math.floor(Math.random() * maxRowid))
+    // 抽样作为参数传入（SQL 文本固定，db.query 按文本缓存语句，拼进 SQL 会让缓存越来越大）
+    picked = get<{ rid: number }>(
+      `SELECT s.rowid AS rid FROM submission_submission s
+       WHERE s.rowid IN (SELECT value FROM json_each($sample)) AND ${cond} AND ${fewRatings}
        ORDER BY RANDOM() LIMIT 1`,
-      params,
-    ) ?? get<{ rid: number }>(`${base} ORDER BY RANDOM() LIMIT 1`, params)
+      { ...params, sample: JSON.stringify(sample) },
+    )
+  }
+  // 只在索引上随机挑出 rowid，再读这一行的代码；否则每个候选都要读一遍 html/css/js
+  const base = `SELECT s.rowid AS rid FROM submission_submission s WHERE ${cond}`
+  picked ??=
+    get<{ rid: number }>(`${base} AND ${fewRatings} ORDER BY RANDOM() LIMIT 1`, params) ??
+    get<{ rid: number }>(`${base} ORDER BY RANDOM() LIMIT 1`, params)
   if (!picked) return c.json(null)
   const pick = get(
     `SELECT s.id, u.username, t.title AS task_title, t.display AS task_display,

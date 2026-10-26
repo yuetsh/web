@@ -1,7 +1,8 @@
 import { createWebHistory, createRouter } from "vue-router"
 import { loginModal } from "./store/modal"
 
-import Workspace from "./pages/Workspace.vue"
+// 编辑器（CodeMirror 等）比较大，用到时才加载；几个路由共用同一个加载函数，切换时不会重新挂载
+const Workspace = () => import("./pages/Workspace.vue")
 import { hasLogin } from "./token"
 import { authed } from "./store/user"
 

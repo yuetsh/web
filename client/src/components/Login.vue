@@ -48,9 +48,9 @@
           />
           <n-alert
             type="error"
-            v-if="showStudentError"
+            v-if="studentError"
             class="message"
-            title="登录失败，请检查密码"
+            :title="studentError"
           />
           <n-button
             block
@@ -79,9 +79,9 @@
           </n-form-item>
           <n-alert
             type="error"
-            v-if="showAdminError"
+            v-if="adminError"
             class="message"
-            title="登录失败，请检查用户名和密码"
+            :title="adminError"
           />
           <n-button
             block
@@ -113,7 +113,7 @@ const selectedClass = ref<string | null>(null)
 const selectedUsername = ref<string | null>(null)
 const studentPassword = ref("")
 const studentLoading = ref(false)
-const showStudentError = ref(false)
+const studentError = ref("")
 
 // Classes data
 const classes = ref<string[]>([])
@@ -135,7 +135,7 @@ const nameOptions = computed(() =>
 const adminName = ref("")
 const adminPassword = ref("")
 const adminLoading = ref(false)
-const showAdminError = ref(false)
+const adminError = ref("")
 
 // Load classes on mount (cached — not reloaded on tab switch)
 onMounted(async () => {
@@ -155,13 +155,13 @@ function onTabChange() {
   selectedClass.value = null
   selectedUsername.value = null
   studentPassword.value = ""
-  showStudentError.value = false
+  studentError.value = ""
   namesError.value = false
   names.value = []
   // Reset admin tab state
   adminName.value = ""
   adminPassword.value = ""
-  showAdminError.value = false
+  adminError.value = ""
 }
 
 async function onClassChange(classname: string) {
@@ -178,10 +178,15 @@ async function onClassChange(classname: string) {
   }
 }
 
+// 失败次数太多被暂时禁止登录时，显示服务端给的提示
+function loginError(err: any, fallback: string) {
+  return err.response?.status === 429 ? err.response.data.detail : fallback
+}
+
 async function submitStudent() {
   if (!selectedUsername.value || !studentPassword.value) return
   studentLoading.value = true
-  showStudentError.value = false
+  studentError.value = ""
   try {
     const data = await Account.login(
       selectedUsername.value,
@@ -194,8 +199,8 @@ async function submitStudent() {
     router.replace(
       window.location.pathname + window.location.search + window.location.hash,
     )
-  } catch {
-    showStudentError.value = true
+  } catch (err: any) {
+    studentError.value = loginError(err, "登录失败，请检查密码")
   } finally {
     studentLoading.value = false
   }
@@ -204,7 +209,7 @@ async function submitStudent() {
 async function submitAdmin() {
   if (!adminName.value || !adminPassword.value) return
   adminLoading.value = true
-  showAdminError.value = false
+  adminError.value = ""
   try {
     const data = await Account.login(adminName.value, adminPassword.value)
     user.username = data.username
@@ -214,8 +219,8 @@ async function submitAdmin() {
     router.replace(
       window.location.pathname + window.location.search + window.location.hash,
     )
-  } catch {
-    showAdminError.value = true
+  } catch (err: any) {
+    adminError.value = loginError(err, "登录失败，请检查用户名和密码")
   } finally {
     adminLoading.value = false
   }

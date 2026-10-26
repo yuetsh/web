@@ -5,7 +5,7 @@ import { config } from "../src/config"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { client, freshDb, makeSubmission, makeTask, makeUser, uuid } from "./helpers"
+import { PASSWORD, client, freshDb, makeSubmission, makeTask, makeUser, uuid } from "./helpers"
 
 beforeEach(freshDb)
 
@@ -48,6 +48,17 @@ describe("权限", () => {
       password: "123456",
     })
     expect(res.status).toBe(404)
+  })
+
+  test("同一用户名连续登录失败 10 次后暂停登录", async () => {
+    makeUser("brute")
+    const anon = await client()
+    for (let i = 0; i < 10; i++) {
+      expect((await anon("POST", "/api/account/login", { username: "brute", password: "wrong" })).status).toBe(401)
+    }
+    // 密码对了也要等窗口过去
+    const res = await anon("POST", "/api/account/login", { username: "brute", password: PASSWORD })
+    expect(res.status).toBe(429)
   })
 
   test("封号后 access token 和 refresh token 都失效", async () => {
@@ -173,6 +184,26 @@ describe("评分", () => {
     const self = await (await client("author"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 5 })
     expect(self.status).toBe(400)
     expect(all(`SELECT 1 FROM submission_rating WHERE user_id = $id`, { id: author })).toEqual([])
+  })
+})
+
+describe("随机评分", () => {
+  test("不给自己的、已评过的；没有可评的返回 null", async () => {
+    const me = makeUser("me")
+    const other = makeUser("other")
+    const task = makeTask("T")
+    makeSubmission(me, task)
+    const subs = Array.from({ length: 5 }, () => makeSubmission(other, task))
+    const c = await client("me")
+    const seen = new Set<string>()
+    for (let i = 0; i < 5; i++) {
+      const res = await c("GET", "/api/submission/random-for-rating")
+      expect(subs.map(uuid)).toContain(res.json.submission_id)
+      expect(seen.has(res.json.submission_id)).toBe(false)
+      seen.add(res.json.submission_id)
+      await c("PUT", `/api/submission/${res.json.submission_id}/score`, { score: 4 })
+    }
+    expect((await c("GET", "/api/submission/random-for-rating")).json).toBeNull()
   })
 })
 

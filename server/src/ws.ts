@@ -21,8 +21,8 @@ export interface WsData {
   pendingUserMessageId: number | null
   abort: AbortController
   closed: boolean
-  // 串行处理消息（与 Django Channels 的行为一致）
-  queue: Promise<void>
+  // 正在处理一条消息（等 AI 回复）；期间再发来的直接拒绝，不排队，免得一次塞几百条刷模型费用
+  busy: boolean
   // 引导对话只在本次连接内保留上下文
   guidanceHistory: ChatMessage[]
 }
@@ -57,7 +57,7 @@ export async function upgrade(
       pendingUserMessageId: null,
       abort: new AbortController(),
       closed: false,
-      queue: Promise.resolve(),
+      busy: false,
       guidanceHistory: [],
     },
   })
@@ -185,6 +185,8 @@ export const websocket: WebSocketHandler<WsData> = {
   // AI 生成可能要一两分钟，期间没有客户端消息
   idleTimeout: 960,
   sendPings: true,
+  // 提示词不会这么长；Bun 默认 16MB
+  maxPayloadLength: 64 * 1024,
 
   open(ws) {
     const d = ws.data
@@ -222,12 +224,19 @@ export const websocket: WebSocketHandler<WsData> = {
     } catch {
       return
     }
+    if (ws.data.busy) {
+      send(ws, { type: "error", content: "上一条消息还在处理，请等 AI 回复完再发" })
+      return
+    }
     const handler = ws.data.kind === "prompt" ? handlePrompt : handleGuidance
-    ws.data.queue = ws.data.queue
-      .then(() => (ws.data.closed ? undefined : handler(ws, data)))
+    ws.data.busy = true
+    handler(ws, data)
       .catch((e) => {
         console.error("websocket handler failed:", e)
         send(ws, { type: "error", content: "服务器出错，请刷新页面重试" })
+      })
+      .finally(() => {
+        ws.data.busy = false
       })
   },
 
