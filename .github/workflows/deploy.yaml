@@ -58,6 +58,7 @@ jobs:
           username: root
           key: ${{ secrets.KEY }}
           script: |
+            set -e
             cd /root/WebPreview
-            git pull --ff-only
+            git pull --ff-only origin main
             docker compose up -d --build
