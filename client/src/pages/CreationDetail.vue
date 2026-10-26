@@ -125,6 +125,7 @@ import {
   setOnCodeComplete,
   streaming,
 } from "../store/prompt"
+import { closeGuidance } from "../store/guidance"
 
 const route = useRoute()
 const router = useRouter()
@@ -146,6 +147,7 @@ watch(streaming, (val) => {
 
 async function load() {
   const data = await Creation.get(display)
+  if (disposed) return
   taskId.value = data.task_id
   title.value = data.title
   content.value = data.content
@@ -212,8 +214,15 @@ function back() {
   router.push({ name: "creation-list" })
 }
 
+// 加载还没完成就离开页面时，不要再建立连接
+let disposed = false
+
 onMounted(load)
-onUnmounted(disconnectPrompt)
+onUnmounted(() => {
+  disposed = true
+  disconnectPrompt()
+  closeGuidance()
+})
 </script>
 
 <style scoped>

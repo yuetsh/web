@@ -170,7 +170,11 @@ function syncRoute(routeName: string) {
   }
 }
 syncRoute(route.name as string)
-watch(() => route.name as string, syncRoute)
+// 只换了 display（比如浏览器后退到上一节教程）也要同步
+watch(
+  () => [route.name as string, route.params.display] as const,
+  ([name]) => syncRoute(name),
+)
 
 defineEmits(["hide"])
 

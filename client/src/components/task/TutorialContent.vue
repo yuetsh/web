@@ -3,7 +3,8 @@
 </template>
 <script lang="ts" setup>
 import { onMounted, ref, useTemplateRef, watch } from "vue"
-import { marked } from "marked"
+import { Marked } from "marked"
+import { trustedExtensions } from "../../utils/markdown"
 import copyFn from "copy-text-to-clipboard"
 import { css, html, js, tab } from "../../store/editors"
 import { Tutorial } from "../../api"
@@ -11,7 +12,8 @@ import { step, tutorialIds, loadTutorials } from "../../store/tutorial"
 import { taskId, assetBaseUrl } from "../../store/task"
 import { useRouter } from "vue-router"
 
-marked.use({
+// 独立实例：带“复制/替换”按钮的代码块只用在教程里，不能改全局的 marked
+const tutorialMarked = new Marked(...trustedExtensions, {
   renderer: {
     code({ text, lang }) {
       const language = lang?.toLowerCase() ?? "html"
@@ -36,15 +38,22 @@ const router = useRouter()
 const content = ref("")
 const $content = useTemplateRef<any>("$content")
 
+// 连点“下一节”时只用最后一次请求的结果
+let renderSeq = 0
+
 async function render() {
+  const seq = ++renderSeq
   const data = await Tutorial.get(step.value)
+  if (seq !== renderSeq) return
   taskId.value = data.task_ptr
   assetBaseUrl.value = `/media/tasks/tutorial/${step.value}/`
   html.value = data.example_html ?? ""
   css.value = data.example_css ?? ""
   js.value = data.example_js ?? ""
   const merged = `# ${data.display}. ${data.title}\n${data.content}`
-  content.value = await marked.parse(merged, { async: true })
+  const rendered = await tutorialMarked.parse(merged, { async: true })
+  if (seq !== renderSeq) return
+  content.value = rendered
 }
 
 function flash(btn: HTMLButtonElement, done: string, original: string) {

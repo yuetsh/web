@@ -150,6 +150,10 @@ const modelOptions = [
   { label: "DeepSeek", value: "deepseek-flash" },
 ]
 const selectedModel = useStorage("prompt-model", "deepseek-flash")
+// 浏览器里可能还存着改版前的模型名
+if (!modelOptions.some((o) => o.value === selectedModel.value)) {
+  selectedModel.value = "deepseek-flash"
+}
 
 // Group messages into user+assistant pairs
 const submittingId = ref<number | null>(null)

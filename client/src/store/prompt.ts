@@ -1,5 +1,5 @@
 import { ref } from "vue"
-import { wsUrl } from "../token"
+import { ReconnectingSocket } from "../utils/socket"
 import { html, css, js } from "./editors"
 
 export interface PromptMessage {
@@ -28,81 +28,75 @@ export function setOnCodeComplete(fn: typeof _onCodeComplete) {
   _onCodeComplete = fn
 }
 
-let ws: WebSocket | null = null
-// 取 token 要等一下，期间又连了别的题或断开时作废这次连接
-let connectSeq = 0
-
-export async function connectPrompt(taskId: number) {
-  currentTaskId.value = taskId
-  if (ws) ws.close()
-  ws = null
-
-  const seq = ++connectSeq
-  const url = await wsUrl(`/ws/prompt/${taskId}/`)
-  if (seq !== connectSeq) return
-  ws = new WebSocket(url)
-
-  ws.onopen = () => {
-    connected.value = true
-  }
-
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-
-    if (data.type === "init") {
-      streaming.value = false
-      streamingContent.value = ""
-      const alreadyLoaded = conversationId.value === data.conversation_id
-      conversationId.value = data.conversation_id
-      if (!alreadyLoaded) {
-        messages.value = data.messages || []
-        const lastAssistant = [...messages.value]
-          .reverse()
-          .find((m) => m.role === "assistant" && m.code)
-        if (lastAssistant?.code) {
-          applyCode(lastAssistant.code)
-        }
+function onMessage(data: any) {
+  if (data.type === "init") {
+    streaming.value = false
+    streamingContent.value = ""
+    const alreadyLoaded = conversationId.value === data.conversation_id
+    conversationId.value = data.conversation_id
+    if (!alreadyLoaded) {
+      messages.value = data.messages || []
+      const lastAssistant = [...messages.value]
+        .reverse()
+        .find((m) => m.role === "assistant" && m.code)
+      if (lastAssistant?.code) {
+        applyCode(lastAssistant.code)
       }
-    } else if (data.type === "stream") {
-      streaming.value = true
-      streamingContent.value += data.content
-    } else if (data.type === "complete") {
-      streaming.value = false
-      messages.value.push({
-        role: "assistant",
-        content: streamingContent.value,
-        id: data.message_id,
-        code: data.code,
-        submitted: false,
-      })
-      streamingContent.value = ""
-      if (data.code) {
-        applyCode(data.code)
-        if (_onCodeComplete) {
-          _onCodeComplete(data.code, data.message_id)
-        }
-      }
-    } else if (data.type === "error") {
-      streaming.value = false
-      streamingContent.value = ""
-      messages.value.push({
-        role: "assistant",
-        content: data.content,
-      })
     }
-  }
-
-  ws.onclose = () => {
-    connected.value = false
+  } else if (data.type === "stream") {
+    streaming.value = true
+    streamingContent.value += data.content
+  } else if (data.type === "complete") {
+    streaming.value = false
+    messages.value.push({
+      role: "assistant",
+      content: streamingContent.value,
+      id: data.message_id,
+      code: data.code,
+      submitted: false,
+    })
+    streamingContent.value = ""
+    if (data.code) {
+      applyCode(data.code)
+      if (_onCodeComplete) {
+        _onCodeComplete(data.code, data.message_id)
+      }
+    }
+  } else if (data.type === "error") {
+    streaming.value = false
+    streamingContent.value = ""
+    messages.value.push({
+      role: "assistant",
+      content: data.content,
+    })
   }
 }
 
+const socket = new ReconnectingSocket({
+  onOpen() {
+    connected.value = true
+  },
+  onMessage,
+  onDrop() {
+    connected.value = false
+    // 断开时服务端会删掉还没有回复的提问，这边也去掉
+    if (streaming.value) dropPendingPrompt()
+  },
+  onGiveUp() {
+    messages.value.push({
+      role: "assistant",
+      content: "与服务器的连接已断开，请刷新页面重试",
+    })
+  },
+})
+
+export function connectPrompt(taskId: number) {
+  currentTaskId.value = taskId
+  socket.connect(`/ws/prompt/${taskId}/`)
+}
+
 export function disconnectPrompt() {
-  connectSeq++
-  if (ws) {
-    ws.close()
-    ws = null
-  }
+  socket.close()
   messages.value = []
   conversationId.value = ""
   connected.value = false
@@ -113,13 +107,12 @@ export function disconnectPrompt() {
 }
 
 export function sendPrompt(content: string, model: string = "") {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  if (!socket.send({ type: "message", content, model })) return
   streaming.value = true
   messages.value.push({ role: "user", content })
-  ws.send(JSON.stringify({ type: "message", content, model }))
 }
 
-export function stopPrompt() {
+function dropPendingPrompt() {
   if (
     messages.value.length > 0 &&
     messages.value[messages.value.length - 1].role === "user"
@@ -128,6 +121,10 @@ export function stopPrompt() {
   }
   streaming.value = false
   streamingContent.value = ""
+}
+
+export function stopPrompt() {
+  dropPendingPrompt()
   if (currentTaskId.value) {
     connectPrompt(currentTaskId.value)
   }

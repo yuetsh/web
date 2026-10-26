@@ -151,8 +151,13 @@ async function batchCreateUsers() {
   }
 }
 
+// 快速翻页时只用最后一次请求的结果
+let initSeq = 0
+
 async function init() {
+  const seq = ++initSeq
   const data = await Account.list(query)
+  if (seq !== initSeq) return
   users.value = data.items
   count.value = data.count
 }
@@ -160,15 +165,15 @@ async function init() {
 watch(
   () => query.role,
   () => {
-    query.page = 1
-    init()
+    if (query.page !== 1) query.page = 1
+    else init()
   },
 )
 watchDebounced(
   () => query.username,
   () => {
-    query.page = 1
-    init()
+    if (query.page !== 1) query.page = 1
+    else init()
   },
   { debounce: 500, maxWait: 1000 },
 )
@@ -177,6 +182,14 @@ watch(
   (v) => {
     init()
     router.push({ params: { page: v } })
+  },
+)
+// 浏览器前进 / 后退时，页码跟着地址栏走
+watch(
+  () => route.params.page,
+  (v) => {
+    const page = Number(v) || 1
+    if (page !== query.page) query.page = page
   },
 )
 

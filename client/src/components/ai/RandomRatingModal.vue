@@ -65,6 +65,8 @@ function clearReshowTimer() {
 async function fetchAndShow() {
   try {
     const item = await Submission.randomForRating(current.value?.submission_id)
+    // 请求期间 AI 已经回复完了，就不要再弹出来
+    if (!streaming.value) return
     if (item) {
       current.value = item
       previewContent.value = buildPreviewDocument({

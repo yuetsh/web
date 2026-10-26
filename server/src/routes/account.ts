@@ -54,19 +54,6 @@ async function insertUser(u: {
 const userExists = (username: string) =>
   !!get(`SELECT 1 FROM account_user WHERE username = $username`, { username })
 
-router.post("/register", async (c) => {
-  const payload = await body(
-    c,
-    z.object({
-      username: z.string(),
-      email: z.email(),
-      password: z.string().min(6).max(20),
-    }),
-  )
-  await insertUser(payload)
-  return c.json({ message: "创建成功" })
-})
-
 router.post("/login", async (c) => {
   const payload = await body(c, z.object({ username: z.string(), password: z.string() }))
   const user = await authenticate(payload.username, payload.password)

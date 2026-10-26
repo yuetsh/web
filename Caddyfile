@@ -8,6 +8,14 @@
     }
 
     handle_path /media/* {
+        # 上传的 html/svg 直接打开时不能当成本站页面跑脚本（会读到 localStorage 里的 token）；
+        # 作为图片、样式、脚本引用时不受 sandbox 影响。预览 iframe 没有 allow-same-origin，
+        # 读字体或 fetch() 素材要跨域许可
+        header {
+            Content-Security-Policy "sandbox"
+            X-Content-Type-Options "nosniff"
+            Access-Control-Allow-Origin "*"
+        }
         root * /media
         file_server
     }

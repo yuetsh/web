@@ -161,3 +161,7 @@ export const requireSuper = (c: Ctx) => requireRoles(c, [Role.SUPER])
 
 export const isStaff = (user: User) =>
   user.role === Role.ADMIN || user.role === Role.SUPER
+
+// 未公开的教程只有超管能看，未公开的挑战管理员也能看（和能编辑它们的人一致）
+export const canSeeUnpublished = (user: User | null | undefined, kind: "tutorial" | "challenge") =>
+  !!user && (kind === "tutorial" ? user.role === Role.SUPER : isStaff(user))

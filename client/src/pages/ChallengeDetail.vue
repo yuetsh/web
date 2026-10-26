@@ -163,6 +163,7 @@ import {
   removeMessagePair,
   markMessageSubmitted,
 } from "../store/prompt"
+import { closeGuidance } from "../store/guidance"
 
 const route = useRoute()
 const router = useRouter()
@@ -221,6 +222,7 @@ async function loadChallenge() {
     Challenge.get(display),
     TaskAssets.listChallenge(display),
   ])
+  if (disposed) return
   taskId.value = data.task_ptr
   challengeAuthor.value = data.author_name ?? ""
   if (data.example_html || data.example_css || data.example_js) {
@@ -236,6 +238,7 @@ async function loadChallenge() {
     async: true,
     renderer: challengeRenderer,
   } as MarkedOptions)
+  if (disposed) return
   assets.value = fetchedAssets
   if (!authed.value) return
   connectPrompt(data.task_ptr)
@@ -291,11 +294,18 @@ function back() {
   router.push({ name: "home-challenge-list" })
 }
 
+// 加载还没完成就离开页面时，不要再建立连接
+let disposed = false
+
 onMounted(() => {
   setupCodeCopy()
   loadChallenge()
 })
-onUnmounted(disconnectPrompt)
+onUnmounted(() => {
+  disposed = true
+  disconnectPrompt()
+  closeGuidance()
+})
 </script>
 
 <style scoped>

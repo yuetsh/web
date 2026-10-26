@@ -1,5 +1,5 @@
 import { ref } from "vue"
-import { wsUrl } from "../token"
+import { ReconnectingSocket } from "../utils/socket"
 
 export interface GuidanceMessage {
   role: "user" | "assistant"
@@ -15,31 +15,19 @@ export const isReady = ref(false)
 export const isOpen = ref(false)
 export const initialPrompt = ref("")
 
-let ws: WebSocket | null = null
 let _taskId = 0
-// 取 token 要等一下，期间又重连或关闭时作废这次连接
-let connectSeq = 0
+// 打开弹窗时带过来的提示词，连上后发一次；重连时不再重发
+let unsentPrompt = ""
 
-async function connect(taskId: number) {
-  if (ws) ws.close()
-  ws = null
-  const seq = ++connectSeq
-  const url = await wsUrl(`/ws/guidance/${taskId}/`)
-  if (seq !== connectSeq) return
-  ws = new WebSocket(url)
-  setupHandlers(ws)
-}
-
-function setupHandlers(socket: WebSocket) {
-  socket.onopen = () => {
+const socket = new ReconnectingSocket({
+  onOpen() {
     connected.value = true
-    if (initialPrompt.value) {
-      sendToSocket(initialPrompt.value)
+    if (unsentPrompt) {
+      sendToSocket(unsentPrompt)
+      unsentPrompt = ""
     }
-  }
-
-  socket.onmessage = (event) => {
-    const data = JSON.parse(event.data)
+  },
+  onMessage(data) {
     if (data.type === "init") {
       streaming.value = false
       streamingContent.value = ""
@@ -57,18 +45,38 @@ function setupHandlers(socket: WebSocket) {
       streamingContent.value = ""
       messages.value.push({ role: "assistant", content: data.content })
     }
-  }
-
-  socket.onclose = () => {
+  },
+  onDrop() {
     connected.value = false
-  }
+    if (streaming.value) dropPendingMessage()
+  },
+  onGiveUp() {
+    messages.value.push({
+      role: "assistant",
+      content: "与服务器的连接已断开，请刷新页面重试",
+    })
+  },
+})
+
+function connect(taskId: number) {
+  socket.connect(`/ws/guidance/${taskId}/`)
 }
 
 function sendToSocket(content: string) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  if (!socket.send({ type: "message", content })) return
   streaming.value = true
   messages.value.push({ role: "user", content })
-  ws.send(JSON.stringify({ type: "message", content }))
+}
+
+function dropPendingMessage() {
+  if (
+    messages.value.length > 0 &&
+    messages.value[messages.value.length - 1].role === "user"
+  ) {
+    messages.value.pop()
+  }
+  streaming.value = false
+  streamingContent.value = ""
 }
 
 export function openGuidance(taskId: number, prompt: string) {
@@ -76,6 +84,7 @@ export function openGuidance(taskId: number, prompt: string) {
 
   _taskId = taskId
   initialPrompt.value = prompt
+  unsentPrompt = prompt
   messages.value = []
   isReady.value = false
   streamingContent.value = ""
@@ -89,26 +98,17 @@ export function sendGuidance(content: string) {
 }
 
 export function stopGuidance() {
-  if (
-    messages.value.length > 0 &&
-    messages.value[messages.value.length - 1].role === "user"
-  ) {
-    messages.value.pop()
-  }
-  streaming.value = false
-  streamingContent.value = ""
+  dropPendingMessage()
   if (_taskId) {
     initialPrompt.value = ""
+    unsentPrompt = ""
     connect(_taskId)
   }
 }
 
 export function closeGuidance() {
-  connectSeq++
-  if (ws) {
-    ws.close()
-    ws = null
-  }
+  socket.close()
+  unsentPrompt = ""
   isOpen.value = false
   messages.value = []
   isReady.value = false

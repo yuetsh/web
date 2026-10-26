@@ -46,9 +46,13 @@ export const GUIDANCE_SYSTEM_PROMPT = `你是一个提示词写作教练，帮�
 5. 如果回复以 [READY] 开头，[READY] 不要加粗，必须保持原始文本
 6. 不要生成任何代码`
 
-const DEFAULT_MODEL = "deepseek-flash"
 // 走火山方舟（ARK）接口的模型
 const ARK_MODELS = new Set(["doubao-seed-2-1-lite-260915"])
+
+// 客户端可选的模型；不认识的（比如浏览器里存着改版前的模型名）一律换成默认模型
+export function chatModel(model?: string) {
+  return model && (model === config.llmModel || ARK_MODELS.has(model)) ? model : config.llmModel
+}
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant"
@@ -63,10 +67,14 @@ interface CompletionOptions {
   timeoutMs?: number
 }
 
+// 流式生成：超过这么久没收到新数据才算超时，另有一个总时长上限
+const STREAM_IDLE_MS = 120_000
+const STREAM_MAX_MS = 15 * 60_000
+
 export const llmConfigured = () => !!config.llmApiKey
 
 function buildRequest(messages: ChatMessage[], opts: CompletionOptions) {
-  const model = opts.model || DEFAULT_MODEL
+  const model = opts.model || config.llmModel
   const ark = ARK_MODELS.has(model)
   const body: Record<string, unknown> = {
     model,
@@ -102,30 +110,60 @@ async function* streamCompletion(
   model?: string,
   signal?: AbortSignal,
 ): AsyncGenerator<string> {
-  const res = await buildRequest(messages, { model, stream: true, signal })
-  await ensureOk(res)
-  if (!res.body) return
-  const decoder = new TextDecoder()
-  let buffer = ""
-  for await (const chunk of res.body) {
-    buffer += decoder.decode(chunk, { stream: true })
-    let idx: number
-    while ((idx = buffer.indexOf("\n")) >= 0) {
-      const line = buffer.slice(0, idx).trim()
-      buffer = buffer.slice(idx + 1)
-      if (!line.startsWith("data:")) continue
-      const data = line.slice(5).trim()
-      if (data === "[DONE]") return
-      const json = JSON.parse(data)
-      if (json.error) throw new Error(json.error.message ?? JSON.stringify(json.error))
-      const content = json.choices?.[0]?.delta?.content
-      if (content) yield content
+  // 带思考的模型生成整页代码可能超过两分钟，只要一直有数据就不该中断
+  const idle = new AbortController()
+  let timer = setTimeout(() => idle.abort(new Error("模型响应超时")), STREAM_IDLE_MS)
+  const resetIdle = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => idle.abort(new Error("模型响应超时")), STREAM_IDLE_MS)
+  }
+  const signals = [idle.signal]
+  if (signal) signals.push(signal)
+  try {
+    const res = await buildRequest(messages, {
+      model,
+      stream: true,
+      signal: AbortSignal.any(signals),
+      timeoutMs: STREAM_MAX_MS,
+    })
+    await ensureOk(res)
+    if (!res.body) return
+    const decoder = new TextDecoder()
+    let buffer = ""
+    // 返回 true 表示收到了 [DONE]
+    function* parse(lines: string[]): Generator<string, boolean> {
+      for (const raw of lines) {
+        const line = raw.trim()
+        if (!line.startsWith("data:")) continue
+        const data = line.slice(5).trim()
+        if (data === "[DONE]") return true
+        const json = JSON.parse(data)
+        if (json.error) throw new Error(json.error.message ?? JSON.stringify(json.error))
+        const content = json.choices?.[0]?.delta?.content
+        if (content) yield content
+      }
+      return false
     }
+    for await (const chunk of res.body) {
+      resetIdle()
+      buffer += decoder.decode(chunk, { stream: true })
+      const lines = buffer.split("\n")
+      buffer = lines.pop()!
+      if (yield* parse(lines)) return
+    }
+    // 最后一行可能没有换行
+    yield* parse([buffer + decoder.decode()])
+  } finally {
+    clearTimeout(timer)
   }
 }
 
 export function streamChat(history: ChatMessage[], model?: string, signal?: AbortSignal) {
-  return streamCompletion([{ role: "system", content: SYSTEM_PROMPT }, ...history], model, signal)
+  return streamCompletion(
+    [{ role: "system", content: SYSTEM_PROMPT }, ...history],
+    chatModel(model),
+    signal,
+  )
 }
 
 export function streamGuidance(history: ChatMessage[], signal?: AbortSignal) {

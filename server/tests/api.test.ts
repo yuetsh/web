@@ -17,6 +17,34 @@ describe("权限", () => {
     expect((await adm("GET", "/api/submission/gradebook/?classname=a")).status).toBe(403)
   })
 
+  test("未公开的教程只有超管能看，未公开的挑战管理员也能看", async () => {
+    makeUser("stu")
+    makeUser("adm", "admin")
+    makeUser("boss", "super")
+    makeTask("草稿教程", "tutorial", 1, false)
+    makeTask("草稿挑战", "challenge", 2, false)
+    makeTask("公开挑战", "challenge", 3, true)
+    const [anon, stu, adm, boss] = await Promise.all([client(), client("stu"), client("adm"), client("boss")])
+    for (const path of ["/api/tutorial/1", "/api/challenge/2", "/api/assets/challenge/2"]) {
+      expect((await anon("GET", path)).status).toBe(404)
+      expect((await stu("GET", path)).status).toBe(404)
+    }
+    expect((await stu("GET", "/api/challenge/3")).status).toBe(200)
+    expect((await adm("GET", "/api/tutorial/1")).status).toBe(404)
+    expect((await adm("GET", "/api/challenge/2")).status).toBe(200)
+    expect((await adm("GET", "/api/assets/challenge/2")).status).toBe(200)
+    expect((await boss("GET", "/api/tutorial/1")).status).toBe(200)
+  })
+
+  test("没有公开注册接口", async () => {
+    const res = await (await client())("POST", "/api/account/register", {
+      username: "x",
+      email: "x@x.com",
+      password: "123456",
+    })
+    expect(res.status).toBe(404)
+  })
+
   test("封号后 access token 和 refresh token 都失效", async () => {
     const id = makeUser("stu")
     makeUser("boss", "super")

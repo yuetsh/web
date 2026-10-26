@@ -1,8 +1,8 @@
 import { Hono } from "hono"
 import { z } from "zod"
 import { all, get, run, tx, now, iso } from "../db"
-import { Role, requireAdmin, requireSuper, requireUser, type User } from "../auth"
-import { HttpError, body, bool, intParam, orNotFound, type Env } from "../http"
+import { Role, canSeeUnpublished, requireAdmin, requireSuper, requireUser, type User } from "../auth"
+import { HttpError, body, bool, intParam, notFound, orNotFound, type Env } from "../http"
 import { deleteTask } from "../services/cascade"
 
 const TASK_COLUMNS = `t.id, t.created, t.modified, t.display, t.title, t.content, t.task_type,
@@ -134,6 +134,7 @@ tutorial.get("/:display", (c) => {
       { display: intParam(c, "display") },
     ),
   )
+  if (!row.is_public && !canSeeUnpublished(c.get("user"), "tutorial")) notFound()
   return c.json(taskOut(row))
 })
 
@@ -227,6 +228,7 @@ challenge.get("/:display", (c) => {
       display: intParam(c, "display"),
     }),
   )
+  if (!r.is_public && !canSeeUnpublished(c.get("user"), "challenge")) notFound()
   return c.json({
     ...taskOut(r),
     score: r.score,

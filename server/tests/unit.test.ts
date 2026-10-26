@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { pyRound, pySum } from "../src/services/pyround"
-import { extractCode, parseGuidanceResponse } from "../src/services/llm"
+import { chatModel, extractCode, parseGuidanceResponse, streamChat } from "../src/services/llm"
+import { config } from "../src/config"
 import { checkPassword, makePassword } from "../src/auth"
 import { formatMicros, iso, uuidHex, uuidOut } from "../src/db"
 import { toCsv } from "../src/services/gradebook"
@@ -66,4 +67,50 @@ test("时间与 UUID 格式", () => {
 
 test("CSV 转义", () => {
   expect(toCsv([["a", 'b"c', "d,e"], [1, 2.5, ""]])).toBe('a,"b""c","d,e"\r\n1,2.5,\r\n')
+})
+
+describe("streamChat", () => {
+  test("不认识的模型换成默认模型，最后一行没有换行也能读到", async () => {
+    let model = ""
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        model = ((await req.json()) as any).model
+        const line = (s: string) => `data: ${JSON.stringify({ choices: [{ delta: { content: s } }] })}`
+        // 一行拆在两个分块之间，最后一行不带换行
+        const body = `${line("你好")}\n\n${line("世")}\n${line("界")}`
+        const enc = new TextEncoder()
+        const cut = body.indexOf("世") + 2
+        return new Response(
+          new ReadableStream({
+            async start(ctrl) {
+              ctrl.enqueue(enc.encode(body.slice(0, cut)))
+              await Bun.sleep(5)
+              ctrl.enqueue(enc.encode(body.slice(cut)))
+              ctrl.close()
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        )
+      },
+    })
+    const saved = { ...config }
+    Object.assign(config, { llmApiKey: "k", llmBaseUrl: `http://localhost:${server.port}` })
+    try {
+      let out = ""
+      for await (const s of streamChat([{ role: "user", content: "hi" }], "deepseek-v4-flash-thinking")) out += s
+      expect(out).toBe("你好世界")
+      expect(model).toBe(config.llmModel)
+    } finally {
+      Object.assign(config, saved)
+      server.stop(true)
+    }
+  })
+
+  test("chatModel 只放行配置里的模型", () => {
+    expect(chatModel("doubao-seed-2-1-lite-260915")).toBe("doubao-seed-2-1-lite-260915")
+    expect(chatModel(config.llmModel)).toBe(config.llmModel)
+    expect(chatModel("gpt-5")).toBe(config.llmModel)
+    expect(chatModel("")).toBe(config.llmModel)
+  })
 })

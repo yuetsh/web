@@ -4,8 +4,8 @@ import { existsSync } from "node:fs"
 import { dirname, extname, join, resolve, sep } from "node:path"
 import { config } from "../config"
 import { all, get, run } from "../db"
-import { requireAdmin, requireSuper, type User } from "../auth"
-import { HttpError, ValidationError, intParam, orNotFound, type Ctx, type Env } from "../http"
+import { canSeeUnpublished, requireAdmin, requireSuper, type User } from "../auth"
+import { HttpError, ValidationError, intParam, notFound, orNotFound, type Ctx, type Env } from "../http"
 
 // 与 Django 的 get_valid_filename 一致：空格换成下划线，去掉除字母数字、-、_、. 以外的字符
 export function validFilename(name: string) {
@@ -53,8 +53,8 @@ type Kind = "challenge" | "tutorial"
 
 function findTask(kind: Kind, display: number) {
   return orNotFound(
-    get<{ id: number; task_type: string; display: number }>(
-      `SELECT t.id, t.task_type, t.display FROM task_task t
+    get<{ id: number; task_type: string; display: number; is_public: number }>(
+      `SELECT t.id, t.task_type, t.display, t.is_public FROM task_task t
        JOIN task_${kind} x ON x.task_ptr_id = t.id WHERE t.display = $display`,
       { display },
     ),
@@ -72,6 +72,7 @@ for (const kind of ["challenge", "tutorial"] as const) {
 
   assets.get(`/${kind}/:display`, (c) => {
     const task = findTask(kind, intParam(c, "display"))
+    if (!task.is_public && !canSeeUnpublished(c.get("user"), kind)) notFound()
     const rows = all<{ name: string; file: string }>(
       `SELECT name, file FROM task_taskasset WHERE task_id = $id ORDER BY id`,
       { id: task.id },

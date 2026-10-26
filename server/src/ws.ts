@@ -1,5 +1,5 @@
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun"
-import { all, run, iso, uuidOut } from "./db"
+import { all, get, run, iso, uuidOut } from "./db"
 import { userFromAccessToken, type User } from "./auth"
 import { canAccessTask, getOrCreateActiveConversation, insertMessage } from "./services/prompt"
 import {
@@ -41,8 +41,12 @@ export async function upgrade(
   const match = PATH_RE.exec(url.pathname)
   if (!match) return null
   const user = await userFromAccessToken(url.searchParams.get("token"))
+  if (!user) return new Response("Unauthorized", { status: 401 })
   const taskId = Number(match[2])
-  if (!user || !canAccessTask(user, taskId)) return new Response("Forbidden", { status: 403 })
+  if (!get(`SELECT 1 FROM task_task WHERE id = $id`, { id: taskId })) {
+    return new Response("Not Found", { status: 404 })
+  }
+  if (!canAccessTask(user, taskId)) return new Response("Forbidden", { status: 403 })
 
   const ok = server.upgrade(req, {
     data: {
@@ -155,6 +159,8 @@ async function handleGuidance(ws: WS, data: any) {
     try {
       full = await streamToClient(ws, streamGuidance(ws.data.guidanceHistory, ws.data.abort.signal))
     } catch (e) {
+      // 这条提问没有回复，留在上下文里会出现连续两条用户消息
+      ws.data.guidanceHistory.pop()
       send(ws, { type: "error", content: `AI 服务出错：${e instanceof Error ? e.message : e}` })
       return
     }
@@ -182,7 +188,14 @@ export const websocket: WebSocketHandler<WsData> = {
 
   open(ws) {
     const d = ws.data
-    d.conversationId = getOrCreateActiveConversation(d.user.id, d.taskId)
+    try {
+      d.conversationId = getOrCreateActiveConversation(d.user.id, d.taskId)
+    } catch (e) {
+      // 比如任务刚被删掉；不关掉的话客户端会一直等 init
+      console.error("websocket open failed:", e)
+      ws.close(1011, "conversation unavailable")
+      return
+    }
     if (d.kind === "guidance") {
       send(ws, { type: "init", messages: [] })
       return
@@ -212,7 +225,10 @@ export const websocket: WebSocketHandler<WsData> = {
     const handler = ws.data.kind === "prompt" ? handlePrompt : handleGuidance
     ws.data.queue = ws.data.queue
       .then(() => (ws.data.closed ? undefined : handler(ws, data)))
-      .catch((e) => console.error("websocket handler failed:", e))
+      .catch((e) => {
+        console.error("websocket handler failed:", e)
+        send(ws, { type: "error", content: "服务器出错，请刷新页面重试" })
+      })
   },
 
   close(ws) {

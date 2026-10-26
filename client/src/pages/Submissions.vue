@@ -341,16 +341,25 @@ function rowClassName(row: SubmissionOut) {
   return submission.value.id === row.id ? "row-active" : ""
 }
 
+// 快速翻页时只用最后一次请求的结果
+let initSeq = 0
+
 async function init() {
+  const seq = ++initSeq
   expandedKeys.value = []
   expandedData.clear()
   const res = await Submission.list(query)
+  if (seq !== initSeq) return
   data.value = res.items
   count.value = res.count
 }
 
+let detailSeq = 0
+
 async function getSubmissionByID(id: string) {
-  submission.value = await Submission.get(id)
+  const seq = ++detailSeq
+  const res = await Submission.get(id)
+  if (seq === detailSeq) submission.value = res
 }
 
 function afterScore() {
@@ -374,26 +383,34 @@ watch(
     router.push({ params: { page: v } })
   },
 )
+// 浏览器前进 / 后退时，页码跟着地址栏走
+watch(
+  () => route.params.page,
+  (v) => {
+    const page = Number(v) || 1
+    if (page !== query.page) query.page = page
+  },
+)
 watchDebounced(
   () => query.username,
   () => {
-    query.page = 1
-    init()
+    if (query.page !== 1) query.page = 1
+    else init()
   },
   { debounce: 500, maxWait: 1000 },
 )
 watch(
   () => query.flag,
   () => {
-    query.page = 1
-    init()
+    if (query.page !== 1) query.page = 1
+    else init()
   },
 )
 watch(
   () => query.zone,
   () => {
-    query.page = 1
-    init()
+    if (query.page !== 1) query.page = 1
+    else init()
   },
 )
 
