@@ -1,93 +1,53 @@
 <template>
   <div class="container">
-    <n-flex align="center" justify="space-between" class="title">
-      <n-flex align="center">
-        <Icon
-          :icon="
-            taskTab === TASK_TYPE.Tutorial
-              ? 'twemoji:books'
-              : 'twemoji:crossed-swords'
-          "
-          :width="20"
-        ></Icon>
-        <n-tabs
-          style="width: 150px"
-          type="segment"
-          animated
-          :value="taskTab"
-          @update:value="changeTab"
-        >
-          <n-tab name="tutorial" tab="教程"></n-tab>
-          <n-tab name="challenge" tab="挑战"></n-tab>
-        </n-tabs>
+    <n-flex align="center" justify="space-between" class="title" :wrap="false">
+      <n-flex align="center" :wrap="false">
+        <span class="panel-name">
+          {{ taskTab === TASK_TYPE.Tutorial ? "教程" : "挑战" }}
+        </span>
         <template v-if="!hideNav">
-          <n-button text @click="prev()" :disabled="prevDisabled()">
-            <Icon :width="24" icon="pepicons-pencil:arrow-left"></Icon>
-          </n-button>
+          <n-tooltip>
+            <template #trigger>
+              <n-button text @click="prev()" :disabled="prevDisabled()">
+                <Icon :width="18" icon="lucide:arrow-left" />
+              </n-button>
+            </template>
+            上一节
+          </n-tooltip>
           <span v-if="progressText" class="progress-text">
             {{ progressText }}
           </span>
-          <n-button text @click="next()" :disabled="nextDisabled()">
-            <Icon :width="24" icon="pepicons-pencil:arrow-right"></Icon>
-          </n-button>
+          <n-tooltip>
+            <template #trigger>
+              <n-button text @click="next()" :disabled="nextDisabled()">
+                <Icon :width="18" icon="lucide:arrow-right" />
+              </n-button>
+            </template>
+            下一节
+          </n-tooltip>
         </template>
       </n-flex>
-      <n-flex>
-        <n-tooltip
+      <n-flex align="center" :wrap="false">
+        <n-button
           v-if="tutorialAssets.length && taskTab === TASK_TYPE.Tutorial"
-          trigger="hover"
+          size="small"
+          quaternary
+          @click="showAssets = true"
         >
-          <template #trigger>
-            <n-button text @click="showAssets = true">
-              <Icon :width="16" icon="lucide:image"></Icon>
-            </n-button>
-          </template>
+          <template #icon><Icon icon="lucide:image" /></template>
           素材
-        </n-tooltip>
-        <n-tooltip v-if="authed" trigger="hover">
-          <template #trigger>
-            <n-button
-              text
-              @click="
-                $router.push({ name: 'submissions', params: { page: 1 } })
-              "
-            >
-              <Icon :width="16" icon="lucide:list"></Icon>
-            </n-button>
-          </template>
-          提交记录
-        </n-tooltip>
-        <n-tooltip v-if="authed" trigger="hover">
-          <template #trigger>
-            <n-button text @click="$router.push({ name: 'creation-list' })">
-              <Icon :width="16" icon="lucide:sparkles"></Icon>
-            </n-button>
-          </template>
-          自由创作
-        </n-tooltip>
-        <n-tooltip v-if="authed" trigger="hover">
-          <template #trigger>
-            <n-button text @click="$router.push({ name: 'showcase' })">
-              <Icon :width="16" icon="lucide:award"></Icon>
-            </n-button>
-          </template>
-          创意工坊
-        </n-tooltip>
-        <n-tooltip v-if="roleSuper" trigger="hover">
-          <template #trigger>
-            <n-button text @click="edit">
-              <Icon :width="16" icon="lucide:edit"></Icon>
-            </n-button>
-          </template>
+        </n-button>
+        <n-button v-if="roleSuper" size="small" quaternary @click="edit">
+          <template #icon><Icon icon="lucide:edit" /></template>
           编辑
-        </n-tooltip>
-        <n-tooltip trigger="hover">
+        </n-button>
+        <n-tooltip>
           <template #trigger>
             <n-button text @click="$emit('hide')">
-              <Icon :width="24" icon="material-symbols:close-rounded"></Icon>
+              <Icon :width="18" icon="lucide:x" />
             </n-button>
           </template>
-          关闭
+          收起教程，编辑器占满屏幕
         </n-tooltip>
       </n-flex>
     </n-flex>
@@ -119,7 +79,7 @@
   </n-modal>
 </template>
 <script lang="ts" setup>
-import { Icon } from "@iconify/vue"
+import { Icon } from "../../icons"
 import { computed, ref, watch } from "vue"
 import {
   step,
@@ -129,7 +89,7 @@ import {
   prevDisabled,
   nextDisabled,
 } from "../../store/tutorial"
-import { authed, roleSuper } from "../../store/user"
+import { roleSuper } from "../../store/user"
 import { taskTab, taskId, challengeDisplay } from "../../store/task"
 import { useRoute, useRouter } from "vue-router"
 import { TASK_TYPE } from "../../utils/const"
@@ -167,6 +127,8 @@ function syncRoute(routeName: string) {
     taskTab.value = TASK_TYPE.Challenge
     if (route.params.display)
       challengeDisplay.value = Number(route.params.display)
+    // 挑战列表里没有选中的任务，“提交”不可用
+    else taskId.value = 0
   }
 }
 syncRoute(route.name as string)
@@ -189,20 +151,6 @@ const progressText = computed(() => {
   return i === -1 ? "" : `${i + 1} / ${ids.length}`
 })
 
-function changeTab(v: TASK_TYPE) {
-  taskId.value = 0
-  taskTab.value = v
-  if (v === TASK_TYPE.Tutorial) {
-    router.push(
-      step.value
-        ? { name: "home-tutorial", params: { display: step.value } }
-        : { name: "home-tutorial-list" },
-    )
-  } else if (v === TASK_TYPE.Challenge) {
-    router.push({ name: "home-challenge-list" })
-  }
-}
-
 function edit() {
   const name =
     taskTab.value === TASK_TYPE.Tutorial
@@ -222,15 +170,22 @@ function edit() {
 
 .title {
   height: 43px;
-  padding: 0 20px;
+  padding: 0 12px 0 16px;
   flex-shrink: 0;
-  border-bottom: 1px solid rgb(239, 239, 245);
+  border-bottom: 1px solid var(--wp-line);
+  background: var(--wp-surface);
   box-sizing: border-box;
+}
+
+.panel-name {
+  font-weight: 600;
+  color: var(--wp-ink);
 }
 
 .progress-text {
   font-size: 12px;
-  color: #999;
+  color: var(--wp-faint);
+  font-family: var(--wp-font-mono);
   min-width: 36px;
   text-align: center;
   user-select: none;

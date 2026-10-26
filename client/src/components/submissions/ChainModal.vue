@@ -239,7 +239,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
 import { NPopconfirm, NButton, useMessage } from "naive-ui"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../../icons"
 import { renderMarkdown } from "../../utils/markdown"
 import { storageShim } from "../../utils/previewStorage"
 import { Prompt, Submission } from "../../api"

@@ -1,12 +1,23 @@
-import { createWebHistory, createRouter } from "vue-router"
+import { createWebHistory, createRouter, type RouteRecordRaw } from "vue-router"
 import { loginModal } from "./store/modal"
 
 // 编辑器（CodeMirror 等）比较大，用到时才加载；几个路由共用同一个加载函数，切换时不会重新挂载
 const Workspace = () => import("./pages/Workspace.vue")
 import { hasLogin } from "./token"
-import { authed } from "./store/user"
+import { authed, roleStaff, roleSuper } from "./store/user"
+import { loadUser } from "./store/session"
 
-const routes = [
+declare module "vue-router" {
+  interface RouteMeta {
+    auth?: boolean
+    // 教学页面：staff 是 admin 和 super，super 只有超管（和后端的 requireAdmin / requireSuper 对应）
+    role?: "staff" | "super"
+    // 不带顶栏的全屏页面
+    bare?: boolean
+  }
+}
+
+const routes: RouteRecordRaw[] = [
   { path: "/", name: "home", component: Workspace, meta: { auth: true } },
   {
     path: "/tutorial",
@@ -43,7 +54,7 @@ const routes = [
     name: "submission",
     component: () => import("./pages/Submission.vue"),
     props: true,
-    meta: { auth: true },
+    meta: { auth: true, bare: true },
   },
   {
     path: "/creation",
@@ -67,12 +78,13 @@ const routes = [
     path: "/dashboard",
     name: "dashboard",
     component: () => import("./pages/Dashboard.vue"),
-    meta: { auth: true },
+    meta: { auth: true, role: "staff" },
     children: [
       {
         path: "tutorial/:display",
         name: "tutorial-editor",
         component: () => import("./pages/TutorialEditor.vue"),
+        meta: { role: "super" },
       },
       {
         path: "challenge/:display",
@@ -83,6 +95,7 @@ const routes = [
         path: "user-manage/:page",
         name: "user-manage",
         component: () => import("./pages/UserManage.vue"),
+        meta: { role: "super" },
       },
       {
         path: "showcase",
@@ -93,6 +106,13 @@ const routes = [
         path: "gradebook",
         name: "gradebook",
         component: () => import("./pages/Gradebook.vue"),
+        meta: { role: "super" },
+      },
+      {
+        // 和顶层的 /submissions 是同一个页面，放在教学侧栏里打开，侧栏不会消失
+        path: "submissions/:page",
+        name: "teach-submissions",
+        component: () => import("./pages/Submissions.vue"),
       },
     ],
   },
@@ -103,10 +123,22 @@ export const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const isLoggedIn = authed.value || hasLogin()
   if (to.meta.auth && !isLoggedIn) {
     loginModal.value = true
     return false
+  }
+  if (to.meta.role || to.name === "dashboard") {
+    await loadUser()
+    const allowed = to.meta.role === "super" ? roleSuper.value : roleStaff.value
+    if (!allowed) return { name: "home" }
+  }
+  // 教学的默认页：超管从教程开始，管理员只能出挑战
+  if (to.name === "dashboard") {
+    return {
+      name: roleSuper.value ? "tutorial-editor" : "challenge-editor",
+      params: { display: 0 },
+    }
   }
 })

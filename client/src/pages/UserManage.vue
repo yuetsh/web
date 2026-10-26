@@ -198,7 +198,7 @@ onMounted(init)
 <style scoped>
 .container {
   padding: 10px 10px 10px 0;
-  height: 100vh;
+  height: 100%;
   overflow: auto;
 }
 </style>

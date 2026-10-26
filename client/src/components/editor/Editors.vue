@@ -10,37 +10,25 @@
     >
       <n-tab-pane name="html" tab="HTML">
         <template #tab>
-          <n-flex align="center">
-            <Icon :width="20" icon="skill-icons:html"></Icon>
-            <span>HTML</span>
-          </n-flex>
+          <span class="lang-tab lang-html">HTML</span>
         </template>
         <Editor v-model:value="html" :font-size="size" language="html" />
       </n-tab-pane>
       <n-tab-pane name="css" tab="CSS">
         <template #tab>
-          <n-flex align="center">
-            <Icon :width="20" icon="skill-icons:css"></Icon>
-            <span>CSS</span>
-          </n-flex>
+          <span class="lang-tab lang-css">CSS</span>
         </template>
         <Editor v-model:value="css" :font-size="size" language="css" />
       </n-tab-pane>
       <n-tab-pane name="js" tab="JS">
         <template #tab>
-          <n-flex align="center">
-            <Icon :width="20" icon="skill-icons:javascript"></Icon>
-            <span>JS</span>
-          </n-flex>
+          <span class="lang-tab lang-js">JS</span>
         </template>
         <Editor v-model:value="js" :font-size="size" language="js" />
       </n-tab-pane>
       <n-tab-pane name="actions" tab="选项">
         <template #tab>
-          <n-flex align="center">
-            <Icon :width="20" icon="skill-icons:actix-dark"></Icon>
-            <span>选项</span>
-          </n-flex>
+          <span class="lang-tab">选项</span>
         </template>
         <n-flex class="wrapper" vertical>
           <n-flex align="center">
@@ -53,7 +41,7 @@
             <span class="label">字号</span>
             <n-flex align="center">
               <span :style="{ 'font-size': size + 'px' }">{{ size }}</span>
-              <n-button :disabled="size === 20" @click="changeSize(size - 2)">
+              <n-button :disabled="size <= 12" @click="changeSize(size - 2)">
                 调小
               </n-button>
               <n-button :disabled="size === 40" @click="changeSize(size + 2)">
@@ -78,7 +66,6 @@
   </div>
 </template>
 <script lang="ts" setup>
-import { Icon } from "@iconify/vue"
 import Editor from "./Editor.vue"
 import Toolbar from "./Toolbar.vue"
 import { html, css, js, tab, size, reset } from "../../store/editors"
@@ -193,14 +180,50 @@ async function formatAndSubmit() {
   font-size: 16px;
 }
 
+/* HTML / CSS / JS 各有固定颜色，见 theme.ts */
+.lang-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--wp-font-mono);
+  font-weight: 600;
+  font-size: 13px;
+}
+.lang-tab.lang-html::before,
+.lang-tab.lang-css::before,
+.lang-tab.lang-js::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.lang-html {
+  color: var(--wp-html);
+}
+.lang-html::before {
+  background: var(--wp-html);
+}
+.lang-css {
+  color: var(--wp-css);
+}
+.lang-css::before {
+  background: var(--wp-css);
+}
+.lang-js {
+  color: var(--wp-js);
+}
+.lang-js::before {
+  background: var(--wp-js);
+}
+
 :deep(.n-tabs-nav .n-tabs-tab[data-name="html"]) {
-  background-color: #fff6f3 !important;
+  background-color: var(--wp-html-soft) !important;
 }
 :deep(.n-tabs-nav .n-tabs-tab[data-name="css"]) {
-  background-color: #f3f6ff !important;
+  background-color: var(--wp-css-soft) !important;
 }
 :deep(.n-tabs-nav .n-tabs-tab[data-name="js"]) {
-  background-color: #fffdf0 !important;
+  background-color: var(--wp-js-soft) !important;
 }
 
 .editors-root {
@@ -208,12 +231,12 @@ async function formatAndSubmit() {
 }
 
 :deep(.tab-active-html .n-tab-pane) {
-  background-color: #fff6f3;
+  background-color: var(--wp-html-soft);
 }
 :deep(.tab-active-css .n-tab-pane) {
-  background-color: #f3f6ff;
+  background-color: var(--wp-css-soft);
 }
 :deep(.tab-active-js .n-tab-pane) {
-  background-color: #fffdf0;
+  background-color: var(--wp-js-soft);
 }
 </style>

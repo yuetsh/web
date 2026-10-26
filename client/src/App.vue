@@ -1,32 +1,17 @@
 <script setup lang="ts">
 import { dateZhCN, zhCN } from "naive-ui"
-import type { GlobalThemeOverrides } from "naive-ui"
 import Login from "./components/Login.vue"
+import AppShell from "./components/layout/AppShell.vue"
 import { onMounted } from "vue"
-import { Account } from "./api"
-import { user } from "./store/user"
+import { useRoute } from "vue-router"
+import { loadUser } from "./store/session"
+import { light, naiveOverrides } from "./theme"
 import hljs from "highlight.js/lib/core"
 
-const themeOverrides: GlobalThemeOverrides = {
-  common: {
-    borderRadius: "6px",
-    borderRadiusSmall: "4px",
-  },
-  Card: {
-    borderRadius: "8px",
-  },
-}
+const route = useRoute()
+const themeOverrides = naiveOverrides(light)
 
-onMounted(async () => {
-  try {
-    const data = await Account.getMyProfile()
-    user.loaded = true
-    user.username = data.username
-    user.role = data.role
-  } catch {
-    user.loaded = true
-  }
-})
+onMounted(loadUser)
 </script>
 
 <template>
@@ -40,7 +25,9 @@ onMounted(async () => {
     <n-modal-provider>
       <n-message-provider :max="1">
         <n-dialog-provider>
-          <router-view></router-view>
+          <!-- 全屏预览这类页面不要顶栏 -->
+          <router-view v-if="route.meta.bare" />
+          <AppShell v-else />
           <Login />
         </n-dialog-provider>
       </n-message-provider>

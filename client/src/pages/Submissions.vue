@@ -98,7 +98,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from "vue"
 import { NButton, NDataTable, NTag, useMessage, type DataTableColumn } from "naive-ui"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../icons"
 import { Submission } from "../api"
 import type { SubmissionOut, FlagType } from "../utils/type"
 import { parseTime } from "../utils/helper"

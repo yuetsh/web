@@ -57,7 +57,7 @@ import { useRouter } from "vue-router"
 import { Submission } from "../../api"
 import { submission } from "../../store/submission"
 import { useMessage } from "naive-ui"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../../icons"
 import copy from "copy-text-to-clipboard"
 import {
   buildPreviewDocument,

@@ -8,20 +8,20 @@ import { computed } from "vue"
 
 const styleTheme = EditorView.baseTheme({
   "& .cm-scroller": {
-    "font-family": "Monaco",
+    "font-family": "var(--wp-font-mono)",
   },
   "&.cm-editor.cm-focused": {
     outline: "none",
   },
   "&.cm-editor .cm-tooltip.cm-tooltip-autocomplete ul": {
-    "font-family": "Monaco",
+    "font-family": "var(--wp-font-mono)",
   },
 })
 
 const bgColors: Record<string, string> = {
-  html: "#fff6f3",
-  css: "#f3f6ff",
-  js: "#fffdf0",
+  html: "var(--wp-html-soft)",
+  css: "var(--wp-css-soft)",
+  js: "var(--wp-js-soft)",
 }
 
 interface Props {
@@ -31,7 +31,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   language: "html",
-  fontSize: 20,
+  fontSize: 16,
 })
 
 const code = defineModel<string>("value")
@@ -43,7 +43,7 @@ const lang = computed(() => {
 })
 
 const bgTheme = computed(() => {
-  const bg = bgColors[props.language] ?? "#ffffff"
+  const bg = bgColors[props.language] ?? "var(--wp-surface)"
   return EditorView.theme({
     "&": { backgroundColor: bg },
     ".cm-gutters": { backgroundColor: bg },

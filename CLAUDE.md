@@ -26,7 +26,10 @@ The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1
   - UI framework: **Naive UI** (auto-imported via `unplugin-vue-components`)
   - `src/token.ts` — tokens in localStorage; refreshes the access token shortly before expiry (one request at a time) and builds WebSocket URLs
   - `src/api.ts` — Axios-based API client; adds the Bearer header, on 401 refreshes once and retries, otherwise clears login and goes home; 403 alerts and goes home
-  - `src/router.ts` — Vue Router with auth guards
+  - `src/router.ts` — Vue Router; `meta.auth` needs login, `meta.role` (`staff` = admin+super, `super`) is checked in the guard after `store/session.loadUser()`, `meta.bare` pages render without the top bar
+  - `src/theme.ts` — the only place colors are defined: one palette (light + dark values) becomes both `--wp-*` CSS variables and Naive UI `themeOverrides`; use `var(--wp-...)` in styles, never hard-coded colors. No `color-mix()` (Chrome 105)
+  - `src/icons.ts` — `<Icon icon="lucide:name" />` renders bundled `lucide-vue-next` icons (works offline); register new names in its map. Fonts are bundled too (`@fontsource/jetbrains-mono`)
+  - `components/layout/AppShell.vue` — top bar for every page; `pages/Dashboard.vue` is the teaching sidebar (“教学”) under `/dashboard`
   - `src/store/` — Reactive state (plain Vue refs, not Vuex/Pinia); `prompt.ts` / `guidance.ts` own the WebSockets
   - `src/pages/`, `src/components/` — user management uses `components/dashboard/UserFormModal.vue` (there is no Django Admin anymore)
 

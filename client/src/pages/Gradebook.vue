@@ -87,7 +87,7 @@
 
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref, watch } from "vue"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../icons"
 import { watchDebounced } from "@vueuse/core"
 import {
   NButton,

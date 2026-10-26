@@ -120,7 +120,7 @@
 import { ref, watch, nextTick, computed } from "vue"
 import { useStorage } from "@vueuse/core"
 import { useMessage } from "naive-ui"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../../icons"
 import GuidancePanel from "./GuidancePanel.vue"
 import { openGuidance } from "../../store/guidance"
 import {
@@ -289,7 +289,7 @@ watch([() => messages.value.length, streamingContent], () => {
 }
 
 .message.assistant .message-role {
-  color: #18a058;
+  color: var(--wp-brand);
 }
 
 .message-content {
@@ -329,7 +329,7 @@ watch([() => messages.value.length, streamingContent], () => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #18a058;
+  background: var(--wp-brand);
   animation: bounce 1.4s ease-in-out infinite;
 }
 

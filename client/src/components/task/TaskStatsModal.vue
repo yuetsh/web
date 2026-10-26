@@ -392,7 +392,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch } from "vue"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../../icons"
 import { useRouter } from "vue-router"
 import { Submission } from "../../api"
 import type { TaskStatsOut } from "../../utils/type"

@@ -82,7 +82,7 @@
 import { storageShim } from "../utils/previewStorage"
 import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../icons"
 import { Showcase } from "../api"
 import type { AwardSection, ShowcaseItem } from "../utils/type"
 

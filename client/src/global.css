@@ -4,8 +4,24 @@
 
 body {
   margin: 0;
+  background: var(--wp-paper);
+  color: var(--wp-ink);
+  font-family: var(--wp-font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 顶栏下面的内容区高度；页面用它代替 100vh */
+:root {
+  --wp-topbar-h: 48px;
+  --wp-main-h: calc(100vh - var(--wp-topbar-h));
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--wp-font-mono);
 }
 
 ::-webkit-scrollbar {
@@ -18,10 +34,15 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d0d0d0;
+  background: var(--wp-line);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #b0b0b0;
+  background: var(--wp-faint);
+}
+
+/* iframe 里都是学生写的网页，网页默认是白底；不设的话会透出页面的底色 */
+iframe {
+  background: #fff;
 }

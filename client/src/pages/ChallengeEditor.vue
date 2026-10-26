@@ -26,8 +26,8 @@
                   width="24"
                   :icon="
                     item.is_public
-                      ? 'twemoji:check-mark-button'
-                      : 'twemoji:locked'
+                      ? 'lucide:globe'
+                      : 'lucide:lock'
                   "
                 ></Icon>
               </n-button>
@@ -97,7 +97,7 @@
           </n-button>
         </n-flex>
         <MarkdownEditor
-          style="height: calc(100vh - 100px)"
+          style="height: calc(var(--wp-main-h) - 100px)"
           v-model="challenge.content"
         />
       </n-flex>
@@ -132,7 +132,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../icons"
 import { Challenge } from "../api"
 import { roleSuper } from "../store/user"
 import type { ChallengeSlim } from "../utils/type"
@@ -296,7 +296,7 @@ onMounted(getContent)
 <style scoped>
 .list {
   overflow: auto;
-  height: calc(100vh - 20px);
+  height: calc(var(--wp-main-h) - 20px);
 }
 
 .col {
@@ -308,6 +308,6 @@ onMounted(getContent)
 }
 
 .editor {
-  height: calc(100vh - 200px);
+  height: calc(var(--wp-main-h) - 200px);
 }
 </style>

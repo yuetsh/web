@@ -84,7 +84,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from "vue"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../../icons"
 import { renderMarkdown } from "../../utils/markdown"
 import {
   messages,
@@ -168,7 +168,7 @@ watch([() => messages.value.length, streamingContent], () => {
 }
 
 .guidance-msg.assistant .msg-role {
-  color: #18a058;
+  color: var(--wp-brand);
 }
 
 .guidance-msg.assistant .msg-content {
@@ -194,7 +194,7 @@ watch([() => messages.value.length, streamingContent], () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #18a058;
+  color: var(--wp-brand);
   font-size: 13px;
   font-weight: 500;
   padding: 6px 10px;

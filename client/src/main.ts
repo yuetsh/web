@@ -1,8 +1,10 @@
 import { createApp } from "vue"
 import { create } from "naive-ui"
 import App from "./App.vue"
+import "@fontsource/jetbrains-mono/400.css"
+import "@fontsource/jetbrains-mono/600.css"
 import "./global.css"
-import { addAPIProvider } from "@iconify/vue"
+import { applyCssVars, light } from "./theme"
 
 //@ts-ignore
 import "github-markdown-css/github-markdown-light.css"
@@ -14,6 +16,7 @@ import "highlight.js/styles/github.min.css"
 import { router } from "./router"
 
 marked.use(...trustedExtensions)
+applyCssVars(light)
 
 const app = createApp(App)
 const naive = create()
@@ -21,9 +24,3 @@ const naive = create()
 app.use(naive)
 app.use(router)
 app.mount("#app")
-
-if (!!import.meta.env.PUBLIC_ICONIFY_URL) {
-  addAPIProvider("", {
-    resources: [import.meta.env.PUBLIC_ICONIFY_URL],
-  })
-}

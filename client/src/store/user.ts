@@ -16,3 +16,5 @@ export const roleAdmin = computed(
 export const roleSuper = computed(
   () => authed.value && user.role === Role.Super,
 )
+// 老师端（教学）：admin 和 super
+export const roleStaff = computed(() => roleAdmin.value || roleSuper.value)

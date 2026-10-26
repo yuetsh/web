@@ -130,7 +130,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../../icons"
 import { useMessage } from "naive-ui"
 import { renderMarkdown } from "../../utils/markdown"
 import { Prompt } from "../../api"
@@ -307,7 +307,7 @@ onMounted(() => {
 
 .history-card.is-selected {
   --n-color: #f7fffa;
-  box-shadow: 0 10px 24px rgba(24, 160, 88, 0.14);
+  box-shadow: 0 10px 24px rgba(13, 122, 82, 0.14);
 }
 
 .history-card.is-selected .history-main {

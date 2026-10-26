@@ -248,7 +248,7 @@ import {
   useMessage,
   type DataTableColumn,
 } from "naive-ui"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../icons"
 import { Showcase } from "../api"
 import type {
   AwardItemManageOut,
@@ -640,8 +640,8 @@ onMounted(async () => {
 }
 
 .award-row.active {
-  background: #e8f8f0;
-  color: #18a058;
+  background: var(--wp-brand-soft);
+  color: var(--wp-brand);
 }
 
 :deep(.table-number-input) {

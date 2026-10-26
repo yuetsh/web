@@ -3,31 +3,33 @@
     <div class="challenge-sider">
       <n-tabs v-model:value="activeTab" type="line" class="left-tabs">
         <template #prefix>
-          <n-button text @click="back" style="margin: 0 8px">
-            <Icon :width="20" icon="pepicons-pencil:arrow-left" />
-          </n-button>
+          <n-tooltip>
+            <template #trigger>
+              <n-button text @click="back" style="margin: 0 8px">
+                <Icon :width="18" icon="lucide:arrow-left" />
+              </n-button>
+            </template>
+            返回挑战列表
+          </n-tooltip>
         </template>
         <template #suffix>
           <n-flex style="margin: 0 8px">
-            <n-button
-              v-if="roleAdmin || roleSuper"
-              text
-              @click="showStats = true"
-            >
-              <Icon :width="16" icon="lucide:bar-chart-2" />
-            </n-button>
-            <n-button
-              v-if="authed"
-              text
-              @click="
-                $router.push({ name: 'submissions', params: { page: 1 } })
-              "
-            >
-              <Icon :width="16" icon="lucide:list" />
-            </n-button>
-            <n-button v-if="roleSuper" text @click="edit">
-              <Icon :width="16" icon="lucide:edit" />
-            </n-button>
+            <n-tooltip v-if="roleAdmin || roleSuper">
+              <template #trigger>
+                <n-button text @click="showStats = true">
+                  <Icon :width="16" icon="lucide:bar-chart-2" />
+                </n-button>
+              </template>
+              本题统计
+            </n-tooltip>
+            <n-tooltip v-if="roleSuper">
+              <template #trigger>
+                <n-button text @click="edit">
+                  <Icon :width="16" icon="lucide:edit" />
+                </n-button>
+              </template>
+              编辑这道题
+            </n-tooltip>
           </n-flex>
         </template>
         <n-tab-pane name="desc" tab="挑战描述" display-directive="show">
@@ -141,7 +143,7 @@
 import { ref, watch, onMounted, onUnmounted, computed, useTemplateRef } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useMessage } from "naive-ui"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../icons"
 import { marked, type MarkedOptions } from "marked"
 import copyFn from "copy-text-to-clipboard"
 import PromptPanel from "../components/ai/PromptPanel.vue"
@@ -312,7 +314,7 @@ onUnmounted(() => {
 <style scoped>
 .challenge-layout {
   display: flex;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -396,7 +398,7 @@ onUnmounted(() => {
 .challenge-sider .codeblock-wrapper pre code {
   padding: 0;
   font-size: 1rem;
-  font-family: Monaco, monospace;
+  font-family: var(--wp-font-mono);
   user-select: text;
 }
 
@@ -426,7 +428,7 @@ onUnmounted(() => {
 }
 
 .challenge-sider .action-btn:hover {
-  border-color: #18a058;
-  color: #18a058;
+  border-color: var(--wp-brand);
+  color: var(--wp-brand);
 }
 </style>

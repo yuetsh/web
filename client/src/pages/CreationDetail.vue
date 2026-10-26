@@ -3,9 +3,14 @@
     <div class="creation-sider">
       <n-tabs v-model:value="activeTab" type="line" class="left-tabs">
         <template #prefix>
-          <n-button text @click="back" style="margin: 0 8px">
-            <Icon :width="20" icon="pepicons-pencil:arrow-left" />
-          </n-button>
+          <n-tooltip>
+            <template #trigger>
+              <n-button text @click="back" style="margin: 0 8px">
+                <Icon :width="18" icon="lucide:arrow-left" />
+              </n-button>
+            </template>
+            返回我的创作
+          </n-tooltip>
         </template>
         <template #suffix>
           <n-flex style="margin: 0 8px">
@@ -112,7 +117,7 @@
 import { onMounted, onUnmounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useMessage } from "naive-ui"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../icons"
 import PromptPanel from "../components/ai/PromptPanel.vue"
 import PromptHistoryPanel from "../components/ai/PromptHistoryPanel.vue"
 import Preview from "../components/editor/Preview.vue"
@@ -229,7 +234,7 @@ onUnmounted(() => {
 <style scoped>
 .creation-layout {
   display: flex;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 

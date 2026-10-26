@@ -119,7 +119,7 @@ watch(step, (v) => {
 .markdown-body pre code {
   padding: 0;
   font-size: 1rem;
-  font-family: Monaco;
+  font-family: var(--wp-font-mono);
 }
 
 .markdown-body .codeblock-wrapper {
@@ -178,7 +178,7 @@ watch(step, (v) => {
 }
 
 .codeblock-action .action-btn:hover {
-  border-color: #18a058;
-  color: #18a058;
+  border-color: var(--wp-brand);
+  color: var(--wp-brand);
 }
 </style>

@@ -67,7 +67,7 @@
 
 <script lang="ts" setup>
 import { ref, watch } from "vue"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../../icons"
 import { useMessage } from "naive-ui"
 import type { UploadFileInfo } from "naive-ui"
 import { TaskAssets } from "../../api"

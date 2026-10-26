@@ -6,12 +6,7 @@
       style="margin-bottom: 32px"
     >
       <div>
-        <n-flex align="center" :size="8">
-          <n-button text @click="$router.push({ name: 'home' })">
-            <Icon :width="20" icon="pepicons-pencil:arrow-left" />
-          </n-button>
-          <n-h2 style="margin: 0">自由创作</n-h2>
-        </n-flex>
+        <n-h2 style="margin: 0">自由创作</n-h2>
         <n-text depth="3">自己定一个主题，和 AI 一起把它做出来</n-text>
       </div>
       <n-button type="primary" @click="openCreate">
@@ -106,7 +101,7 @@
 import { onMounted, reactive, ref } from "vue"
 import { useRouter } from "vue-router"
 import { useDialog, useMessage } from "naive-ui"
-import { Icon } from "@iconify/vue"
+import { Icon } from "../icons"
 import { Creation } from "../api"
 import type { CreationSlim } from "../utils/type"
 

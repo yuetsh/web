@@ -33,7 +33,8 @@ export const STORAGE_KEY = {
   CSS: "web-css",
   JS: "web-js",
   TAB: "web-tab",
-  FONTSIZE: "web-fontsize",
+  // 默认字号从 24 改成 16 时换了 key，让机房电脑上存着的旧值失效
+  FONTSIZE: "web-fontsize-v2",
 }
 
 export const BASE_URL = import.meta.env.PUBLIC_BASE_URL
