@@ -39,7 +39,8 @@ export function getRole(role: Role) {
   }[role]
 }
 
-export type FlagType = "red" | "blue" | "green" | "yellow" | null
+// 只用 present（课上展示）；以前的四色标记数据里还可能有
+export type FlagType = "present" | "red" | "blue" | "green" | "yellow" | null
 
 export interface TaskAsset {
   name: string
@@ -362,13 +363,68 @@ export interface PromptRound {
   js: string | null
 }
 
+// 打分前不带作者（打完分 updateScore 返回）
 export interface RandomRatingItem {
   submission_id: string
-  username: string
   task_title: string
   task_display: number
   task_type: TASK_TYPE
   html: string | null
   css: string | null
   js: string | null
+}
+
+export interface ReviewOptions {
+  classes: string[]
+  tasks: {
+    id: number
+    task_type: "tutorial" | "challenge"
+    display: number
+    title: string
+    is_public: boolean
+  }[]
+}
+
+export interface ReviewProgress {
+  student_count: number
+  // task_id → 交了的人数
+  submitted: Record<string, number>
+}
+
+export interface ReviewSubmission {
+  id: string
+  score: number
+  my_score: number
+  rating_count: number
+  flag: FlagType
+  view_count: number
+  submit_count: number
+  created: string
+  html: string
+  css: string
+  js: string
+}
+
+export interface ReviewStudent {
+  user_id: number
+  username: string
+  submission: ReviewSubmission | null
+}
+
+export interface PeerWork {
+  id: string
+  // 自己打分之前是 null
+  username: string | null
+  score: number | null
+  my_score: number
+  created: string
+  html: string
+  css: string
+  js: string
+}
+
+export interface PeerWorks {
+  // 自己还没交这道题
+  locked: boolean
+  items: PeerWork[]
 }

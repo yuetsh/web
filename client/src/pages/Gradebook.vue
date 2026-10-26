@@ -83,9 +83,18 @@
       style="flex: 1; min-height: 0;"
     />
   </n-flex>
+  <n-drawer
+    :show="!!reviewId"
+    :width="400"
+    placement="right"
+    @update:show="(v: boolean) => !v && (reviewId = null)"
+  >
+    <ReviewPanel v-if="reviewId" :submission-id="reviewId" @close="reviewId = null" />
+  </n-drawer>
 </template>
 
 <script setup lang="ts">
+import ReviewPanel from "../components/review/ReviewPanel.vue"
 import { computed, h, onMounted, reactive, ref, watch } from "vue"
 import { Icon } from "../icons"
 import { watchDebounced } from "@vueuse/core"
@@ -96,7 +105,6 @@ import {
   useMessage,
   type DataTableColumn,
 } from "naive-ui"
-import { useRouter } from "vue-router"
 import { Account, Gradebook } from "../api"
 import { displayGradebookStudentName } from "../utils/gradebook"
 import type {
@@ -108,7 +116,6 @@ import type {
   GradebookTaskType,
 } from "../utils/type"
 
-const router = useRouter()
 const message = useMessage()
 const classesLoading = ref(false)
 const loading = ref(false)
@@ -146,13 +153,11 @@ function taskTitle(task: GradebookTask) {
   return `${typeLabel}${task.display}`
 }
 
+// 点分数：在右侧打开和批改页一样的详情，能直接打分、看提示词
+const reviewId = ref<string | null>(null)
 function openSubmission(cell: GradebookCell) {
   if (!cell.submitted || !cell.submission_id) return
-  const { href } = router.resolve({
-    name: "submission",
-    params: { id: cell.submission_id },
-  })
-  window.open(href, "_blank")
+  reviewId.value = cell.submission_id
 }
 
 function gradeTagType(grade: string) {

@@ -279,53 +279,8 @@
             </div>
           </div>
 
-          <!-- 标记统计 -->
-          <div>
-            <div
-              style="
-                font-weight: 600;
-                font-size: 13px;
-                margin-bottom: 8px;
-                color: #333;
-              "
-            >
-              标记统计
-            </div>
-            <n-flex :size="8" style="flex-wrap: wrap">
-              <div
-                v-for="flag in flagBadges"
-                :key="flag.label"
-                :style="{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '4px 10px',
-                  background: flag.bg,
-                  borderRadius: '4px',
-                  border: `1px solid ${flag.border}`,
-                }"
-              >
-                <span
-                  :style="{
-                    width: '7px',
-                    height: '7px',
-                    background: flag.color,
-                    borderRadius: '50%',
-                    display: 'inline-block',
-                  }"
-                ></span>
-                <span :style="{ color: flag.color, fontSize: '12px' }">{{
-                  flag.label
-                }}</span>
-                <span style="font-weight: 700; font-size: 13px; color: #333">{{
-                  flag.value
-                }}</span>
-              </div>
-            </n-flex>
-          </div>
-
           <!-- 人气前五 -->
-          <div style="margin-top: 12px">
+          <div>
             <div
               style="
                 font-weight: 600;
@@ -482,41 +437,6 @@ const countBuckets = computed(() => {
       color: "#888",
       bg: "#fafafa",
       borderColor: "#e0e0e0",
-    },
-  ]
-})
-
-const flagBadges = computed(() => {
-  if (!stats.value) return []
-  const f = stats.value.flag_stats
-  return [
-    {
-      label: "值得展示",
-      value: f.red,
-      color: "#d03050",
-      bg: "#fff0f0",
-      border: "#ffd0d0",
-    },
-    {
-      label: "需要讲解",
-      value: f.blue,
-      color: "#2080f0",
-      bg: "#f0f7ff",
-      border: "#c8deff",
-    },
-    {
-      label: "优秀作品",
-      value: f.green,
-      color: "#18a058",
-      bg: "#f0fff4",
-      border: "#b8e8c8",
-    },
-    {
-      label: "需要改进",
-      value: f.yellow,
-      color: "#f0a020",
-      bg: "#fffbf0",
-      border: "#ffe8a0",
     },
   ]
 })

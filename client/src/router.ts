@@ -109,10 +109,16 @@ const routes: RouteRecordRaw[] = [
         meta: { role: "super" },
       },
       {
+        path: "review",
+        name: "review",
+        component: () => import("./pages/Review.vue"),
+      },
+      {
         // 和顶层的 /submissions 是同一个页面，放在教学侧栏里打开，侧栏不会消失
         path: "submissions/:page",
         name: "teach-submissions",
         component: () => import("./pages/Submissions.vue"),
+        meta: { role: "super" },
       },
     ],
   },
@@ -134,11 +140,6 @@ router.beforeEach(async (to) => {
     const allowed = to.meta.role === "super" ? roleSuper.value : roleStaff.value
     if (!allowed) return { name: "home" }
   }
-  // 教学的默认页：超管从教程开始，管理员只能出挑战
-  if (to.name === "dashboard") {
-    return {
-      name: roleSuper.value ? "tutorial-editor" : "challenge-editor",
-      params: { display: 0 },
-    }
-  }
+  // 教学的默认页是批改
+  if (to.name === "dashboard") return { name: "review" }
 })

@@ -106,8 +106,8 @@ async function rate(score: number) {
   if (!current.value) return
   rating.value = true
   try {
-    await Submission.updateScore(current.value.submission_id, score)
-    revealed.value = current.value.username
+    const res = await Submission.updateScore(current.value.submission_id, score)
+    revealed.value = res.username ?? "同学"
     current.value = null
     showLarge.value = false
     setTimeout(() => {

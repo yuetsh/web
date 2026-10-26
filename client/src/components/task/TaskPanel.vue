@@ -37,6 +37,14 @@
           <template #icon><Icon icon="lucide:image" /></template>
           素材
         </n-button>
+        <n-button
+          v-if="authed && taskTab === TASK_TYPE.Tutorial && taskId"
+          size="small"
+          quaternary
+          @click="showPeers = true"
+        >
+          同学作品
+        </n-button>
         <n-button v-if="roleSuper" size="small" quaternary @click="edit">
           <template #icon><Icon icon="lucide:edit" /></template>
           编辑
@@ -54,6 +62,11 @@
     <TutorialContent v-if="taskTab === TASK_TYPE.Tutorial" />
     <ChallengeList v-else />
   </div>
+  <PeersDrawer
+    v-model:show="showPeers"
+    :task-id="taskId"
+    :asset-base-url="`/media/tasks/tutorial/${step}/`"
+  />
   <n-modal
     v-model:show="showAssets"
     preset="card"
@@ -89,7 +102,8 @@ import {
   prevDisabled,
   nextDisabled,
 } from "../../store/tutorial"
-import { roleSuper } from "../../store/user"
+import { authed, roleSuper } from "../../store/user"
+import PeersDrawer from "../review/PeersDrawer.vue"
 import { taskTab, taskId, challengeDisplay } from "../../store/task"
 import { useRoute, useRouter } from "vue-router"
 import { TASK_TYPE } from "../../utils/const"
@@ -100,6 +114,7 @@ import TutorialContent from "./TutorialContent.vue"
 
 const tutorialAssets = ref<TaskAsset[]>([])
 const showAssets = ref(false)
+const showPeers = ref(false)
 
 async function loadTutorialAssets(display: number) {
   if (!display) {

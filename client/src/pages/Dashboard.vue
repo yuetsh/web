@@ -51,6 +51,13 @@ const groups = computed(() =>
       label: "班级",
       items: [
         {
+          label: "批改",
+          icon: "lucide:check-circle",
+          route: { name: "review" },
+          names: ["review"],
+          show: true,
+        },
+        {
           label: "成绩册",
           icon: "lucide:graduation-cap",
           route: { name: "gradebook" },
@@ -58,11 +65,12 @@ const groups = computed(() =>
           show: roleSuper.value,
         },
         {
+          // 全站提交列表留给超管排查问题；平时批改用上面的“批改”
           label: "全部提交",
           icon: "lucide:list",
           route: { name: "teach-submissions", params: { page: 1 } },
           names: ["teach-submissions"],
-          show: true,
+          show: roleSuper.value,
         },
       ],
     },

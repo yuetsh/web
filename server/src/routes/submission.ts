@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { z } from "zod"
 import { all, get, run, tx, now, iso, likeEscape, newUuidHex, uuidHex, uuidOut } from "../db"
-import { Role, isStaff, requireSuper, requireUser } from "../auth"
+import { Role, isStaff, requireSuper, requireUser, type User } from "../auth"
 import {
   HttpError,
   ValidationError,
@@ -30,10 +30,35 @@ import {
 } from "../services/prompt"
 import { pyRound } from "../services/pyround"
 import showcase from "./showcase"
+import review from "./review"
 
 const router = new Hono<Env>()
 
 router.route("/showcase", showcase)
+router.route("/review", review)
+
+// 学生能看的提交：自己的、进了作品展的、本班同学在自己也交过的题上的。老师都能看
+function canView(user: User, sub: { id: string; user_id: number; task_id: number }) {
+  if (isStaff(user) || sub.user_id === user.id) return true
+  if (get(`SELECT 1 FROM submission_submissionaward WHERE submission_id = $id`, { id: sub.id })) return true
+  if (!user.classname) return false
+  return !!get(
+    `SELECT 1 FROM account_user u
+     WHERE u.id = $owner AND u.classname = $classname
+       AND EXISTS (SELECT 1 FROM submission_submission s WHERE s.user_id = $me AND s.task_id = $task_id)`,
+    { owner: sub.user_id, classname: user.classname, me: user.id, task_id: sub.task_id },
+  )
+}
+
+function requireView(user: User, id: string) {
+  const sub = orNotFound(
+    get<{ id: string; user_id: number; task_id: number }>(
+      `SELECT id, user_id, task_id FROM submission_submission WHERE id = $id`,
+      { id },
+    ),
+  )
+  if (!canView(user, sub)) throw new HttpError(403, "交过这道题以后才能看同学的作品")
+}
 
 // 当天（UTC 零点起）的评分次数，与原实现保持一致
 function todayRatingCount(userId: number) {
@@ -221,13 +246,19 @@ router.get("/", (c) => {
     where.push("t.task_type = $task_type")
     params.task_type = f.task_type
   }
-  if (f.username) {
-    where.push(`u.username LIKE $username ESCAPE '\\'`)
-    params.username = likeEscape(f.username)
-  }
-  if (f.user_id) {
+  // 学生只能看自己的提交（同学的作品走 /review/peers）
+  if (user.role === Role.NORMAL) {
     where.push("s.user_id = $user_id")
-    params.user_id = f.user_id
+    params.user_id = user.id
+  } else {
+    if (f.username) {
+      where.push(`u.username LIKE $username ESCAPE '\\'`)
+      params.username = likeEscape(f.username)
+    }
+    if (f.user_id) {
+      where.push("s.user_id = $user_id")
+      params.user_id = f.user_id
+    }
   }
   // flag / zone 前的一元 + 让 SQLite 不用这两列的单列索引（那样要回表读大行），改走 slim 覆盖索引
   if (f.flag === "any") where.push("+s.flag IS NOT NULL")
@@ -288,6 +319,7 @@ router.get("/", (c) => {
 router.get("/by-user-task", (c) => {
   const me = requireUser(c)
   const q = query(c, z.object({ user_id: qs.int, task_id: qs.int }))
+  if (me.role === Role.NORMAL && q.user_id !== me.id) throw new HttpError(403, "没有权限")
   const rows = all(
     `${SUBMISSION_SELECT} ${SUBMISSION_FROM}
      WHERE s.user_id = $user_id AND s.task_id = $task_id ORDER BY s.created DESC`,
@@ -333,14 +365,14 @@ router.get("/random-for-rating", (c) => {
     get<{ rid: number }>(`${base} ORDER BY RANDOM() LIMIT 1`, params)
   if (!picked) return c.json(null)
   const pick = get(
-    `SELECT s.id, u.username, t.title AS task_title, t.display AS task_display,
+    `SELECT s.id, t.title AS task_title, t.display AS task_display,
        t.task_type, s.html, s.css, s.js
      ${SUBMISSION_FROM} WHERE s.rowid = $rid`,
     { rid: picked.rid },
   )!
+  // 打分前不告诉作者是谁（打完分 PUT /:id/score 会返回）
   return c.json({
     submission_id: uuidOut(pick.id),
-    username: pick.username,
     task_title: pick.task_title,
     task_display: pick.task_display,
     task_type: pick.task_type,
@@ -348,13 +380,6 @@ router.get("/random-for-rating", (c) => {
     css: pick.css,
     js: pick.js,
   })
-})
-
-router.delete("/flags", (c) => {
-  const user = requireUser(c)
-  if (!isStaff(user)) throw new HttpError(403, "没有权限")
-  const res = run(`UPDATE submission_submission SET flag = NULL WHERE flag IS NOT NULL`)
-  return c.json({ cleared: res.changes })
 })
 
 // ── 统计 ──────────────────────────────────────────────────────────────────────
@@ -510,9 +535,9 @@ router.delete("/:id", (c) => {
 })
 
 router.get("/:id/prompt-chain", (c) => {
-  requireUser(c)
+  const user = requireUser(c)
   const id = uuidParam(c, "id")
-  orNotFound(get(`SELECT 1 FROM submission_submission WHERE id = $id`, { id }))
+  requireView(user, id)
   const msg = get<MessageRow>(`SELECT * FROM prompt_message WHERE submission_id = $id`, { id })
   if (!msg) throw new HttpError(404, "该提交没有关联提示词链")
   return c.json(buildPromptRounds(msg))
@@ -521,6 +546,7 @@ router.get("/:id/prompt-chain", (c) => {
 router.get("/:id", (c) => {
   const user = requireUser(c)
   const id = uuidParam(c, "id")
+  requireView(user, id)
   const s = orNotFound(get(`${SUBMISSION_SELECT} ${SUBMISSION_FROM} WHERE s.id = $id`, { me: user.id, id }))
   return c.json(submissionOut(s))
 })
@@ -539,7 +565,13 @@ router.put("/:id/score", async (c) => {
   const id = uuidParam(c, "id")
   const { score } = await body(c, z.object({ score: z.number().int().max(5) }))
   if (score <= 0) throw new HttpError(400, "分数不能为零")
-  const sub = orNotFound(get<{ user_id: number }>(`SELECT user_id FROM submission_submission WHERE id = $id`, { id }))
+  const sub = orNotFound(
+    get<{ user_id: number; username: string }>(
+      `SELECT s.user_id, u.username FROM submission_submission s
+       JOIN account_user u ON u.id = s.user_id WHERE s.id = $id`,
+      { id },
+    ),
+  )
   if (sub.user_id === user.id) throw new HttpError(400, "不能给自己的提交打分")
 
   const exists = get(`SELECT 1 FROM submission_rating WHERE user_id = $user_id AND submission_id = $id`, {
@@ -558,7 +590,8 @@ router.put("/:id/score", async (c) => {
     )
     updateSubmissionScore(id)
   })
-  return c.json({ message: "打分成功" })
+  // 互评时打分前是匿名的，打完分再告诉作者是谁
+  return c.json({ message: "打分成功", username: sub.username })
 })
 
 router.put("/:id/flag", async (c) => {
@@ -567,7 +600,9 @@ router.put("/:id/flag", async (c) => {
   const id = uuidParam(c, "id")
   const { flag } = await body(
     c,
-    z.object({ flag: z.enum(["red", "blue", "green", "yellow"]).nullable().default(null) }),
+    z.object({
+      flag: z.enum(["present", "red", "blue", "green", "yellow"]).nullable().default(null),
+    }),
   )
   orNotFound(get(`SELECT 1 FROM submission_submission WHERE id = $id`, { id }))
   run(`UPDATE submission_submission SET flag = $flag WHERE id = $id`, { flag, id })

@@ -24,6 +24,10 @@ import type {
   CreationSlim,
   CreationDetail,
   CreationIn,
+  ReviewOptions,
+  ReviewProgress,
+  ReviewStudent,
+  PeerWorks,
 } from "./utils/type"
 import { BASE_URL } from "./utils/const"
 import {
@@ -320,7 +324,11 @@ export const Submission = {
     await http.post(`/submission/${id}/view`)
   },
 
-  async updateScore(id: string, score: number) {
+  // 返回作者名：互评打分前是匿名的
+  async updateScore(
+    id: string,
+    score: number,
+  ): Promise<{ message: string; username?: string }> {
     const res = await http.put(`/submission/${id}/score`, { score })
     return res.data
   },
@@ -335,11 +343,6 @@ export const Submission = {
   async updateFlag(id: string, flag: FlagType) {
     const res = await http.put(`/submission/${id}/flag`, { flag })
     return res.data
-  },
-
-  async clearAllFlags() {
-    const res = await http.delete(`/submission/flags`)
-    return res.data as { cleared: number }
   },
 
   async getStats(taskId: number, classname?: string): Promise<TaskStatsOut> {
@@ -454,6 +457,26 @@ export const Helper = {
       headers: { "content-type": "multipart/form-data" },
     })
     return !!res.data.url ? res.data.url : ""
+  },
+}
+
+// 老师按“班级 × 任务”批改；学生看本班同学的作品
+export const Review = {
+  async options(): Promise<ReviewOptions> {
+    return (await http.get("/submission/review/options")).data
+  },
+  async progress(classname: string): Promise<ReviewProgress> {
+    return (await http.get("/submission/review/progress", { params: { classname } })).data
+  },
+  async classWall(classname: string, taskId: number): Promise<ReviewStudent[]> {
+    return (
+      await http.get("/submission/review/class", {
+        params: { classname, task_id: taskId },
+      })
+    ).data
+  },
+  async peers(taskId: number): Promise<PeerWorks> {
+    return (await http.get(`/submission/review/peers/${taskId}`)).data
   },
 }
 

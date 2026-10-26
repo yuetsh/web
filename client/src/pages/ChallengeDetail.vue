@@ -15,6 +15,7 @@
       </n-tag>
     </template>
     <template #tools>
+      <n-button quaternary size="small" @click="showPeers = true">同学作品</n-button>
       <n-button v-if="assets.length" quaternary size="small" @click="showAssets = true">
         素材
       </n-button>
@@ -53,6 +54,7 @@
     </template>
   </Workbench>
   <TaskStatsModal v-model:show="showStats" :task-id="taskId" />
+  <PeersDrawer v-model:show="showPeers" :task-id="taskId" :asset-base-url="assetBaseUrl" />
   <n-modal
     v-model:show="showAssets"
     preset="card"
@@ -80,6 +82,7 @@ import copyFn from "copy-text-to-clipboard"
 import { Icon } from "../icons"
 import Workbench from "../components/workbench/Workbench.vue"
 import TaskStatsModal from "../components/task/TaskStatsModal.vue"
+import PeersDrawer from "../components/review/PeersDrawer.vue"
 import { Challenge, TaskAssets } from "../api"
 import type { TaskAsset } from "../utils/type"
 import { taskId, taskTab, challengeDisplay } from "../store/task"
@@ -119,6 +122,7 @@ const assets = ref<TaskAsset[]>([])
 const exampleCode = ref<Code | null>(null)
 const showStats = ref(false)
 const showAssets = ref(false)
+const showPeers = ref(false)
 
 const assetBaseUrl = computed(
   () => `/media/tasks/challenge/${challengeDisplay.value}/`,

@@ -13,27 +13,17 @@
       >
         <n-flex align="center" justify="end">
             <n-select
-              :value="query.flag"
-              style="width: 100px"
-              clearable
-              placeholder="标记"
-              :options="flagFilterOptions"
-              @update:value="handleFlagSelect"
-            />
-            <n-select
               v-model:value="query.zone"
-              style="width: 100px"
+              style="width: 110px"
               clearable
-              placeholder="从夯到拉"
-              :options="[
-                { label: '夯爆了', value: 'featured' },
-                { label: 'NPC', value: 'pending' },
-                { label: '拉完了', value: 'low' },
-              ]"
+              placeholder="得分分区"
+              :options="zoneOptions"
             />
             <n-input
+              v-if="isAdmin"
               style="width: 120px"
               v-model:value="query.username"
+              placeholder="搜索学生"
               clearable
             />
             <n-pagination
@@ -100,7 +90,7 @@ import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from "vue"
 import { NButton, NDataTable, NTag, useMessage, type DataTableColumn } from "naive-ui"
 import { Icon } from "../icons"
 import { Submission } from "../api"
-import type { SubmissionOut, FlagType } from "../utils/type"
+import type { SubmissionOut } from "../utils/type"
 import { parseTime } from "../utils/helper"
 import { goHome } from "../utils/helper"
 import { saveTaskCode } from "../composables/useTaskCode"
@@ -112,7 +102,6 @@ import Preview from "../components/editor/Preview.vue"
 import TaskTitle from "../components/submissions/TaskTitle.vue"
 import CodeModal from "../components/submissions/CodeModal.vue"
 import ChainModal from "../components/submissions/ChainModal.vue"
-import FlagCell from "../components/submissions/FlagCell.vue"
 import ExpandedSubTable from "../components/submissions/ExpandedSubTable.vue"
 
 import { submission } from "../store/submission"
@@ -131,7 +120,6 @@ const query = reactive({
   username: (Array.isArray(route.query.username)
     ? ""
     : (route.query.username ?? "")) as string,
-  flag: null as string | null,
   zone: null as string | null,
 })
 
@@ -154,37 +142,12 @@ const expandedLoading = reactive(new Set<string>())
 // 管理员判断
 const isAdmin = computed(() => roleAdmin.value || roleSuper.value)
 
-// Flag 过滤选项
-const flagFilterOptions = computed(() => {
-  const opts = [
-    { label: "红旗", value: "red" },
-    { label: "蓝旗", value: "blue" },
-    { label: "绿旗", value: "green" },
-    { label: "黄旗", value: "yellow" },
-    { label: "全部", value: "any" },
-  ]
-  if (isAdmin.value) opts.push({ label: "清除", value: "_clear_all" })
-  return opts
-})
-
-function handleFlagSelect(value: string | null) {
-  if (value === "_clear_all") {
-    clearAllFlags()
-    return
-  }
-  query.flag = value
-}
-
-async function updateFlag(row: SubmissionOut, flag: FlagType) {
-  await Submission.updateFlag(row.id, flag)
-  row.flag = flag
-}
-
-async function clearAllFlags() {
-  await Submission.clearAllFlags()
-  data.value = data.value.map((d) => ({ ...d, flag: null }))
-  query.flag = null
-}
+// 得分分区（按得分高低和评分人数分的三档，见 server/src/services/score.ts）
+const zoneOptions = [
+  { label: "优秀", value: "featured" },
+  { label: "待定", value: "pending" },
+  { label: "待提高", value: "low" },
+]
 
 function showChain(submissionId: string, username: string) {
   chainSubmissionId.value = submissionId
@@ -209,28 +172,17 @@ const columns: DataTableColumn<SubmissionOut>[] = [
       }),
   },
   {
-    title: "",
-    key: "flag",
-    width: 50,
-    render: (row) =>
-      h(FlagCell, {
-        flag: row.flag ?? null,
-        isAdmin: isAdmin.value,
-        "onUpdate:flag": (flag: FlagType) => updateFlag(row, flag),
-      }),
-  },
-  {
-    title: "",
+    title: "分区",
     key: "zone",
-    width: 42,
+    width: 64,
     render: (row) => {
       const map: Record<
         string,
         { label: string; type: "success" | "default" | "warning" }
       > = {
-        featured: { label: "夯", type: "success" },
-        pending: { label: "N", type: "default" },
-        low: { label: "拉", type: "warning" },
+        featured: { label: "优秀", type: "success" },
+        pending: { label: "待定", type: "default" },
+        low: { label: "待提高", type: "warning" },
       }
       if (!row.zone || !map[row.zone]) return null
       const { label, type } = map[row.zone]
@@ -403,13 +355,6 @@ watchDebounced(
     else init()
   },
   { debounce: 500, maxWait: 1000 },
-)
-watch(
-  () => query.flag,
-  () => {
-    if (query.page !== 1) query.page = 1
-    else init()
-  },
 )
 watch(
   () => query.zone,
