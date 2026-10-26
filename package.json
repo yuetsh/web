@@ -1,0 +1,14 @@
+{
+  "name": "webpreview",
+  "private": true,
+  "type": "module",
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "build": "bun run --filter webpreview-client build",
+    "build:staging": "bun run --filter webpreview-client build:staging",
+    "test": "bun run --filter webpreview-server test",
+    "typecheck": "bun run --filter webpreview-server typecheck",
+    "fmt": "bun run --filter webpreview-client fmt"
+  }
+}

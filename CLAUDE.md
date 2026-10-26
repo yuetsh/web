@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-WebPreview is a web-based tutorial/challenge platform where users view tutorials and submit HTML/CSS/JS code for challenges. It has a Bun backend (`server/`) and a Vue 3 frontend (`client/`) in one repository, deployed via Docker Compose with Caddy as reverse proxy.
+WebPreview is a web-based tutorial/challenge platform where users view tutorials and submit HTML/CSS/JS code for challenges. It is a Bun workspaces monorepo: a Bun backend (`server/`, package `webpreview-server`) and a Vue 3 frontend (`client/`, package `webpreview-client`) share one root `package.json` and one `bun.lock`, deployed via Docker Compose with Caddy as reverse proxy.
 
 The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1–2 GB). It keeps Django's exact database schema (table names, column types, UTC `YYYY-MM-DD HH:MM:SS.ffffff` timestamps, 32-char hex UUIDs, `pbkdf2_sha256$...` password hashes) so old data loads unchanged. The Django code is in git history before that change.
 
@@ -36,9 +36,16 @@ The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1
 
 ## Development Commands
 
+From the repo root (each script runs inside its workspace, via `bun run --filter`):
 ```bash
-./dev.sh                 # backend (bun --watch) + frontend together
+bun install              # installs both workspaces into the single root bun.lock
+bun run dev              # backend (bun --watch, :8000) + frontend (Vite, :3000) together
+bun run build            # client production build (build:staging for the school server)
+bun run test             # server tests
+bun run typecheck        # server typecheck
+bun run fmt              # format the client
 ```
+Add a dependency from inside its workspace (`cd client && bun add x`); the lockfile is still the root one.
 
 ### Server (from `server/`)
 ```bash
@@ -53,14 +60,14 @@ Config comes from `server/.env` (see `server/.env.example`); dev DB is `server/d
 
 ### Client (from `client/`)
 ```bash
-bun install          # Install deps (bun.lock)
-bun run start        # Dev server (Vite, run on the Bun runtime) on :3000
+bun run dev          # Dev server (Vite, run on the Bun runtime) on :3000
 bun run build        # Production build (bun run build:staging for the school server)
 bun fmt              # Format with Bun's built-in formatter (config in bunfig.toml)
 ```
 Frontend env vars used at build time: `PUBLIC_BASE_URL`, `PUBLIC_WS_URL`, `PUBLIC_WEB_URL` (dev proxy target for `/media` and `/ws`).
 
 ### Docker (from project root)
+`server/Dockerfile` builds with the repo root as context (so it can use the root `bun.lock`) and installs only the server workspace; `.dockerignore` is an allowlist, so new top-level server files must be added there.
 ```bash
 docker compose up -d --build
 docker compose run --rm webpreview-api bun scripts/create-superuser.ts <username> <password>

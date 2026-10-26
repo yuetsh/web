@@ -30,9 +30,8 @@ jobs:
           bun-version: 1.4.4
 
       - name: Build client
-        working-directory: client
         run: |
-          bun install --frozen-lockfile
+          bun install --frozen-lockfile --filter webpreview-client
           bun run ${{ matrix.build_command }}
         env:
           CI: false

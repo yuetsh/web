@@ -13,7 +13,9 @@ services:
     restart: unless-stopped
 
   webpreview-api:
-    build: server
+    build:
+      context: .
+      dockerfile: server/Dockerfile
     container_name: webpreview-api
     env_file:
       - .env

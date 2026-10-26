@@ -1,0 +1,9 @@
+# 只有 server/Dockerfile 用仓库根目录做构建上下文；其余一概不发给 docker（数据库、media、node_modules 等）
+*
+!package.json
+!bun.lock
+!client/package.json
+!server/package.json
+!server/tsconfig.json
+!server/src
+!server/scripts
