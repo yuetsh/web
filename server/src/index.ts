@@ -1,5 +1,6 @@
 import { app } from "./app"
 import { config } from "./config"
+import { db } from "./db"
 import { upgrade, websocket, type WsData } from "./ws"
 
 const server = Bun.serve<WsData>({
@@ -15,5 +16,8 @@ const server = Bun.serve<WsData>({
   },
   websocket,
 })
+
+// 长期运行的连接按 SQLite 文档建议定期刷新统计信息
+setInterval(() => db.run("PRAGMA optimize"), 60 * 60 * 1000)
 
 console.log(`webpreview server listening on http://localhost:${server.port}`)

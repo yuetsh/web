@@ -25,6 +25,9 @@ CREATE INDEX IF NOT EXISTS "submission_submission_task_id_91e9556b" ON "submissi
 CREATE INDEX IF NOT EXISTS "submission_submission_user_id_71741691" ON "submission_submission" ("user_id");
 CREATE INDEX IF NOT EXISTS "submission_submission_flag_d96bc4aa" ON "submission_submission" ("flag");
 CREATE INDEX IF NOT EXISTS "submission_submission_zone_a1bbf0a2" ON "submission_submission" ("zone");
+-- 非 Django 原有：除 html/css/js 外的常用列。user_id 等列在表里排在 html/css/js 后面，
+-- 直接读表要先读完整段代码，所以列表、打分、统计等扫描都靠这个覆盖索引
+CREATE INDEX IF NOT EXISTS "submission_submission_slim" ON "submission_submission" ("user_id", "task_id", "created", "score", "flag", "zone", "raw_score", "id");
 CREATE TABLE IF NOT EXISTS "submission_rating" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "score" integer NOT NULL, "created" datetime NOT NULL, "submission_id" char(32) NOT NULL REFERENCES "submission_submission" ("id") DEFERRABLE INITIALLY DEFERRED, "user_id" bigint NOT NULL REFERENCES "account_user" ("id") DEFERRABLE INITIALLY DEFERRED);
 CREATE UNIQUE INDEX IF NOT EXISTS "submission_rating_user_id_submission_id_29be4c39_uniq" ON "submission_rating" ("user_id", "submission_id");
 CREATE INDEX IF NOT EXISTS "submission_rating_submission_id_a20dcece" ON "submission_rating" ("submission_id");
@@ -57,6 +60,8 @@ export function openDb(path: string): Database {
   db.run("PRAGMA busy_timeout = 5000")
   db.run("PRAGMA foreign_keys = ON")
   db.run(SCHEMA)
+  // SQLite 不会自动 ANALYZE，没有统计信息时规划器常挑错索引；0x10002 = 打开时只分析必要的表
+  db.run("PRAGMA optimize=0x10002")
   return db
 }
 

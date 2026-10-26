@@ -234,13 +234,14 @@ router.get("/", (c) => {
     where.push("s.user_id = $user_id")
     params.user_id = f.user_id
   }
-  if (f.flag === "any") where.push("s.flag IS NOT NULL")
+  // flag / zone 前的一元 + 让 SQLite 不用这两列的单列索引（那样要回表读大行），改走 slim 覆盖索引
+  if (f.flag === "any") where.push("+s.flag IS NOT NULL")
   else if (f.flag) {
-    where.push("s.flag = $flag")
+    where.push("+s.flag = $flag")
     params.flag = f.flag
   }
   if (f.zone) {
-    where.push("s.zone = $zone")
+    where.push("+s.zone = $zone")
     params.zone = f.zone
   }
   if (f.score_lt_threshold !== undefined) {
@@ -258,7 +259,8 @@ router.get("/", (c) => {
   }
   if (f.grouped) {
     // 分组模式：每个 (user, task) 只保留最新一条
-    where.push(`s.id = (SELECT s3.id FROM submission_submission s3
+    // 用 rowid 而不是 id，这样子查询能完全走 submission_submission_slim 覆盖索引
+    where.push(`s.rowid = (SELECT s3.rowid FROM submission_submission s3
       WHERE s3.user_id = s.user_id AND s3.task_id = s.task_id ORDER BY s3.created DESC LIMIT 1)`)
   }
 
@@ -271,12 +273,16 @@ router.get("/", (c) => {
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : ""
   const { limit, offset } = pageWindow(f)
 
+  // 先只在索引上排序分页拿到这一页的 rowid，再读这几行的完整内容；
+  // 否则排序时要把每条提交的 html/css/js 大行都读一遍
   const items = all(
     `${SUBMISSION_SELECT},
        (SELECT COUNT(*) FROM submission_submission s2
         WHERE s2.user_id = s.user_id AND s2.task_id = s.task_id) AS submit_count
-     ${SUBMISSION_FROM} ${whereSql}
-     ORDER BY ${orderBy} LIMIT $limit OFFSET $offset`,
+     ${SUBMISSION_FROM}
+     WHERE s.rowid IN (SELECT s.rowid ${SUBMISSION_FROM} ${whereSql}
+                       ORDER BY ${orderBy} LIMIT $limit OFFSET $offset)
+     ORDER BY ${orderBy}`,
     { ...params, me: user.id, limit, offset },
   )
   const count = get<{ n: number }>(`SELECT COUNT(*) AS n ${SUBMISSION_FROM} ${whereSql}`, params)!.n
@@ -305,20 +311,25 @@ router.get("/random-for-rating", (c) => {
   }
   if (user.role === Role.NORMAL && todayRatingCount(user.id) >= 30) return c.json(null)
 
-  const base = `SELECT s.id, u.username, t.title AS task_title, t.display AS task_display,
-      t.task_type, s.html, s.css, s.js
-    ${SUBMISSION_FROM}
+  // 只在索引上随机挑出 rowid，再读这一行的代码；否则每个候选都要读一遍 html/css/js
+  const base = `SELECT s.rowid AS rid FROM submission_submission s
     WHERE s.user_id != $me
       AND NOT EXISTS (SELECT 1 FROM submission_rating r WHERE r.submission_id = s.id AND r.user_id = $me)
       ${excludeId ? "AND s.id != $exclude" : ""}`
   const params = { me: user.id, ...(excludeId ? { exclude: excludeId } : {}) }
-  const pick =
-    get(
+  const picked =
+    get<{ rid: number }>(
       `${base} AND (SELECT COUNT(*) FROM submission_rating r WHERE r.submission_id = s.id) < 5
        ORDER BY RANDOM() LIMIT 1`,
       params,
-    ) ?? get(`${base} ORDER BY RANDOM() LIMIT 1`, params)
-  if (!pick) return c.json(null)
+    ) ?? get<{ rid: number }>(`${base} ORDER BY RANDOM() LIMIT 1`, params)
+  if (!picked) return c.json(null)
+  const pick = get(
+    `SELECT s.id, u.username, t.title AS task_title, t.display AS task_display,
+       t.task_type, s.html, s.css, s.js
+     ${SUBMISSION_FROM} WHERE s.rowid = $rid`,
+    { rid: picked.rid },
+  )!
   return c.json({
     submission_id: uuidOut(pick.id),
     username: pick.username,
