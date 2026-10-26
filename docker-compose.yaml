@@ -1,0 +1,41 @@
+services:
+  webpreview-web:
+    image: caddy:alpine
+    container_name: webpreview-web
+    volumes:
+      - ./build:/usr/share/caddy:ro
+      - ./api/static:/static:ro
+      - ./media:/media
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - 8081:80
+    depends_on:
+      - webpreview-api
+    restart: unless-stopped
+
+  webpreview-api:
+    build: api
+    container_name: webpreview-api
+    env_file:
+      - .env
+    volumes:
+      - ./media:/app/media
+    restart: unless-stopped
+    depends_on:
+      - webpreview-db
+
+  webpreview-db:
+    image: postgres:17-alpine
+    container_name: webpreview-db
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  webpreview-redis:
+    image: redis:7-alpine
+    container_name: webpreview-redis
+    restart: unless-stopped
+    volumes:
+      - ./redis:/data

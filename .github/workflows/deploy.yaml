@@ -28,17 +28,35 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm install
-      - run: npm run ${{ matrix.build_command }}
+          cache-dependency-path: client/package-lock.json
+
+      - name: Build client
+        working-directory: client
+        run: |
+          npm install
+          npm run ${{ matrix.build_command }}
         env:
           CI: false
 
-      - uses: easingthemes/ssh-deploy@main
+      - name: Upload client to ${{ matrix.name }}
+        uses: easingthemes/ssh-deploy@main
         with:
           SSH_PRIVATE_KEY: ${{ secrets.KEY }}
           REMOTE_HOST: ${{ secrets.HOST }}
           REMOTE_PORT: ${{ matrix.remote_port }}
           ARGS: "-avzr --delete"
-          SOURCE: dist/
+          SOURCE: client/dist/
           REMOTE_USER: root
           TARGET: /root/WebPreview/build
+
+      - name: Update server on ${{ matrix.name }}
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HOST }}
+          port: ${{ matrix.remote_port }}
+          username: root
+          key: ${{ secrets.KEY }}
+          script: |
+            cd /root/WebPreview
+            git pull --ff-only
+            docker compose up -d --build

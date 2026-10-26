@@ -1,0 +1,17 @@
+# 运行时数据（服务器上由 docker compose 挂载）
+.env
+/data/
+/build/
+/media/
+/redis/
+/sqlite/
+
+# 本地工具目录
+.agents/
+.codex
+.deepseek/
+.superpowers/
+.worktrees/
+
+node_modules/
+.DS_Store
