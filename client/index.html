@@ -7,16 +7,6 @@
     <title>前端开发学习平台</title>
     <link rel="stylesheet" href="/normalize.min.css" />
     <link rel="stylesheet" href="/style.css" />
-    <script>
-      window.localStorage.setItem("maxkbMaskTip", true)
-    </script>
-    <% if (process.env.PUBLIC_MAXKB_URL) { %>
-    <script
-      async
-      defer
-      src="<%= process.env.PUBLIC_MAXKB_URL %>"
-    ></script>
-    <% } %>
   </head>
   <body>
     <div id="app"></div>
