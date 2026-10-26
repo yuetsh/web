@@ -7,6 +7,7 @@ import {
   parseGuidanceResponse,
   streamChat,
   streamGuidance,
+  userFacingError,
   type ChatMessage,
 } from "./services/llm"
 
@@ -122,7 +123,8 @@ async function handlePrompt(ws: WS, data: any) {
     try {
       full = await streamToClient(ws, streamChat(history, model, ws.data.abort.signal))
     } catch (e) {
-      send(ws, { type: "error", content: `AI 服务出错：${e instanceof Error ? e.message : e}` })
+      // 客户端自己断开导致的中止不算出错
+      if (!ws.data.closed) send(ws, { type: "error", content: userFacingError(e) })
       return
     }
     if (ws.data.closed) return
@@ -161,7 +163,8 @@ async function handleGuidance(ws: WS, data: any) {
     } catch (e) {
       // 这条提问没有回复，留在上下文里会出现连续两条用户消息
       ws.data.guidanceHistory.pop()
-      send(ws, { type: "error", content: `AI 服务出错：${e instanceof Error ? e.message : e}` })
+      // 客户端自己断开导致的中止不算出错
+      if (!ws.data.closed) send(ws, { type: "error", content: userFacingError(e) })
       return
     }
     if (ws.data.closed) return

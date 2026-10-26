@@ -158,9 +158,36 @@ async function* streamCompletion(
   }
 }
 
+// 发给模型的对话上下文：只留最近 20 条；除最后一条 AI 回复外，旧回复里的代码块换成占位文字。
+// 每次回复都是完整代码，模型只需要最新那份；否则对话越长 token 越多，最后会超出上下文长度
+const MAX_HISTORY = 20
+const CODE_BLOCK = /```[\s\S]*?```/g
+
+export function trimHistory(history: ChatMessage[]): ChatMessage[] {
+  const recent = history.slice(-MAX_HISTORY)
+  const last = recent.findLastIndex((m) => m.role === "assistant")
+  return recent.map((m, i) =>
+    m.role === "assistant" && i !== last
+      ? { ...m, content: m.content.replace(CODE_BLOCK, "```\n（旧版本代码已省略）\n```") }
+      : m,
+  )
+}
+
+// 给学生看的错误：不把模型接口的原始返回（可能带接口细节）原样发出去，完整信息写日志
+export function userFacingError(e: unknown) {
+  console.error("LLM request failed:", e)
+  const message = e instanceof Error ? e.message : String(e)
+  if (message === "模型响应超时" || (e instanceof Error && e.name === "TimeoutError")) {
+    return "AI 响应超时，请重试"
+  }
+  const status = /^Error code: (\d+)/.exec(message)?.[1]
+  if (status === "429") return "AI 服务繁忙，请稍后重试"
+  return status ? `AI 服务出错（${status}），请稍后重试` : "AI 服务出错，请稍后重试"
+}
+
 export function streamChat(history: ChatMessage[], model?: string, signal?: AbortSignal) {
   return streamCompletion(
-    [{ role: "system", content: SYSTEM_PROMPT }, ...history],
+    [{ role: "system", content: SYSTEM_PROMPT }, ...trimHistory(history)],
     chatModel(model),
     signal,
   )

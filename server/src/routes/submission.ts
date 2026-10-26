@@ -16,7 +16,7 @@ import {
   type Env,
   uuidParam,
 } from "../http"
-import { deleteSubmissions } from "../services/cascade"
+import { deleteRound, deleteSubmissions, hasRatingsOrAwards } from "../services/cascade"
 import { updateSubmissionScore } from "../services/score"
 import { classifyMessage, inBackground } from "../services/classifier"
 import { buildGradebook, gradebookCsvRows, toCsv } from "../services/gradebook"
@@ -81,13 +81,6 @@ function submissionOut(s: any) {
     modified: iso(s.modified),
   }
 }
-
-const hasRatingsOrAwards = (submissionId: string) =>
-  !!get(
-    `SELECT 1 WHERE EXISTS (SELECT 1 FROM submission_rating WHERE submission_id = $id)
-       OR EXISTS (SELECT 1 FROM submission_submissionaward WHERE submission_id = $id)`,
-    { id: submissionId },
-  )
 
 // ── 创建提交 ──────────────────────────────────────────────────────────────────
 
@@ -508,11 +501,10 @@ router.delete("/:id", (c) => {
     throw new HttpError(400, "该提交已被评分或获奖，无法删除")
   }
   tx(() => {
-    // 关联的助手消息会随提交一起删除，它前面那条用户消息也一起删掉
+    // 有关联的 AI 回复时，回复和它前面的提问一起删掉
     const asst = get<MessageRow>(`SELECT * FROM prompt_message WHERE submission_id = $id`, { id })
-    const userMsg = asst ? getPrecedingUserMessage(asst) : null
-    deleteSubmissions("id = $id", { id })
-    if (userMsg) run(`DELETE FROM prompt_message WHERE id = $id`, { id: userMsg.id })
+    if (asst) deleteRound(asst)
+    else deleteSubmissions("id = $id", { id })
   })
   return c.json({ message: "删除成功" })
 })

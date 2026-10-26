@@ -1,4 +1,5 @@
-import { all, run } from "../db"
+import { all, get, run } from "../db"
+import { getPrecedingUserMessage, type MessageRow } from "./prompt"
 
 // Django 的 on_delete=CASCADE 是在应用层做的，这里手动按依赖顺序删除。
 // 调用方负责包在事务里。
@@ -13,6 +14,22 @@ export function deleteSubmissions(where: string, params: Record<string, unknown>
     run(`DELETE FROM prompt_message WHERE submission_id = $id`, { id })
   }
   run(`DELETE FROM submission_submission WHERE ${where}`, params)
+}
+
+// 被评过分或获过奖的提交只有超管能删
+export const hasRatingsOrAwards = (submissionId: string) =>
+  !!get(
+    `SELECT 1 WHERE EXISTS (SELECT 1 FROM submission_rating WHERE submission_id = $id)
+       OR EXISTS (SELECT 1 FROM submission_submissionaward WHERE submission_id = $id)`,
+    { id: submissionId },
+  )
+
+// 删除一轮对话：AI 回复、它前面那条用户提问，以及回复关联的提交
+export function deleteRound(asst: MessageRow) {
+  const userMsg = getPrecedingUserMessage(asst)
+  if (userMsg) run(`DELETE FROM prompt_message WHERE id = $id`, { id: userMsg.id })
+  run(`DELETE FROM prompt_message WHERE id = $id`, { id: asst.id })
+  if (asst.submission_id) deleteSubmissions("id = $id", { id: asst.submission_id })
 }
 
 export function deleteTask(taskId: number) {

@@ -1,15 +1,15 @@
 import { Hono } from "hono"
 import { z } from "zod"
-import { all, get, run, tx, iso, uuidOut } from "../db"
+import { all, get, tx, iso, uuidOut } from "../db"
 import { Role, isStaff, requireUser } from "../auth"
-import { HttpError, intParam, orNotFound, qs, query, uuidParam, type Env } from "../http"
-import { deleteSubmissions } from "../services/cascade"
+import { HttpError, ValidationError, intParam, orNotFound, qs, query, uuidParam, type Env } from "../http"
+import { deleteRound, hasRatingsOrAwards } from "../services/cascade"
 import {
   classifyConversationMessages,
   classifyMessagesBatch,
   inBackground,
 } from "../services/classifier"
-import { getPrecedingUserMessage, type MessageRow } from "../services/prompt"
+import type { MessageRow } from "../services/prompt"
 
 const router = new Hono<Env>()
 
@@ -29,6 +29,10 @@ router.get("/conversations", (c) => {
   if (q.task_id) {
     where.push("c.task_id = $task_id")
     params.task_id = q.task_id
+  }
+  // 不带条件就是全站所有对话（每个还要数一遍消息），会卡住整个服务
+  if (!where.length) {
+    throw new ValidationError([{ loc: ["query", "task_id"], msg: "需要 task_id 或 user_id" }])
   }
   const rows = all(
     `SELECT c.id, c.user_id, u.username, c.task_id, t.title AS task_title, c.is_active, c.created,
@@ -177,20 +181,10 @@ router.delete("/messages/:message_id/pair", (c) => {
   if (asst.owner_id !== user.id && user.role !== Role.SUPER) {
     throw new HttpError(403, "只能删除自己的消息")
   }
-  if (asst.submission_id && user.role !== Role.SUPER) {
-    const used = get(
-      `SELECT 1 WHERE EXISTS (SELECT 1 FROM submission_rating WHERE submission_id = $id)
-         OR EXISTS (SELECT 1 FROM submission_submissionaward WHERE submission_id = $id)`,
-      { id: asst.submission_id },
-    )
-    if (used) throw new HttpError(400, "该消息关联的提交已被评分或获奖，无法删除")
+  if (asst.submission_id && user.role !== Role.SUPER && hasRatingsOrAwards(asst.submission_id)) {
+    throw new HttpError(400, "该消息关联的提交已被评分或获奖，无法删除")
   }
-  const userMsg = getPrecedingUserMessage(asst)
-  tx(() => {
-    if (userMsg) run(`DELETE FROM prompt_message WHERE id = $id`, { id: userMsg.id })
-    run(`DELETE FROM prompt_message WHERE id = $id`, { id: asst.id })
-    if (asst.submission_id) deleteSubmissions("id = $id", { id: asst.submission_id })
-  })
+  tx(() => deleteRound(asst))
   return c.json({ deleted: true, submission_deleted: !!asst.submission_id })
 })
 

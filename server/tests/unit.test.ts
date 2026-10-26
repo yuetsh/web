@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import { pyRound, pySum } from "../src/services/pyround"
-import { chatModel, extractCode, parseGuidanceResponse, streamChat } from "../src/services/llm"
+import {
+  chatModel,
+  extractCode,
+  parseGuidanceResponse,
+  streamChat,
+  trimHistory,
+  userFacingError,
+} from "../src/services/llm"
 import { config } from "../src/config"
 import { checkPassword, makePassword } from "../src/auth"
 import { formatMicros, iso, uuidHex, uuidOut } from "../src/db"
@@ -113,4 +120,32 @@ describe("streamChat", () => {
     expect(chatModel("gpt-5")).toBe(config.llmModel)
     expect(chatModel("")).toBe(config.llmModel)
   })
+})
+
+test("trimHistory 只留最近 20 条，旧回复的代码换成占位", () => {
+  const history = Array.from({ length: 30 }, (_, i) => ({
+    role: (i % 2 ? "assistant" : "user") as "user" | "assistant",
+    content: i % 2 ? `第${i}版\n\`\`\`html\n<p>${i}</p>\n\`\`\`` : `改一下 ${i}`,
+  }))
+  const out = trimHistory(history)
+  expect(out).toHaveLength(20)
+  expect(out[0]!.content).toBe("改一下 10")
+  expect(out.at(-1)!.content).toContain("<p>29</p>")
+  expect(out.at(-3)!.content).toBe("第27版\n```\n（旧版本代码已省略）\n```")
+  expect(out.filter((m) => m.content.includes("<p>"))).toHaveLength(1)
+})
+
+test("userFacingError 不透出接口原始返回", () => {
+  const quiet = console.error
+  console.error = () => {}
+  try {
+    expect(userFacingError(new Error('Error code: 401 - {"error":"invalid api key sk-xxx"}'))).toBe(
+      "AI 服务出错（401），请稍后重试",
+    )
+    expect(userFacingError(new Error("Error code: 429 - busy"))).toBe("AI 服务繁忙，请稍后重试")
+    expect(userFacingError(new Error("模型响应超时"))).toBe("AI 响应超时，请重试")
+    expect(userFacingError(new Error("fetch failed: ECONNREFUSED 10.0.0.1"))).toBe("AI 服务出错，请稍后重试")
+  } finally {
+    console.error = quiet
+  }
 })

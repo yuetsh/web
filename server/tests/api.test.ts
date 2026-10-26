@@ -226,6 +226,25 @@ describe("提交与删除", () => {
     expect(all(`SELECT * FROM prompt_message`)).toEqual([])
   })
 
+  test("删除一轮对话：连带提问和关联提交；被评过分的不能删", async () => {
+    makeUser("stu")
+    makeUser("other")
+    const task = makeTask("T")
+    const stu = await client("stu")
+    const first = await stu("POST", "/api/submission/", { task_id: task, html: "<p>1", prompt: "第一版" })
+    const second = await stu("POST", "/api/submission/", { task_id: task, html: "<p>2", prompt: "第二版" })
+    const asstOf = (sub: string) =>
+      get(`SELECT id FROM prompt_message WHERE submission_id = $id`, { id: sub.replaceAll("-", "") })!.id
+
+    await (await client("other"))("PUT", `/api/submission/${second.json.id}/score`, { score: 4 })
+    expect((await stu("DELETE", `/api/prompt/messages/${asstOf(second.json.id)}/pair`)).status).toBe(400)
+
+    const res = await stu("DELETE", `/api/prompt/messages/${asstOf(first.json.id)}/pair`)
+    expect(res.json).toEqual({ deleted: true, submission_deleted: true })
+    expect(all(`SELECT content FROM prompt_message WHERE role = 'user'`)).toEqual([{ content: "第二版" }])
+    expect(all(`SELECT COUNT(*) AS n FROM submission_submission`)).toEqual([{ n: 1 }])
+  })
+
   test("被评分的提交只有超管能删", async () => {
     const author = makeUser("author")
     makeUser("other")
