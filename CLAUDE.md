@@ -21,7 +21,8 @@ The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1
   - `scripts/` — one-off CLIs: `migrate-from-postgres.ts`, `create-superuser.ts`, `classify-prompts.ts`, `recalculate-scores.ts`
   - Roles: `super`, `admin`, `normal`. Task model is multi-table: `task_task` + one of `task_tutorial` / `task_challenge` / `task_creation` (`task_ptr_id`)
 
-- **`client/`** — Vue 3 + TypeScript SPA built with **Rsbuild**
+- **`client/`** — Vue 3 + TypeScript SPA built with **Vite**; Bun is the package manager and runtime (no Node/npm)
+  - `vite.config.ts` — browser targets are Chrome ≥ 87 (lab machines run Chrome 105); `@vitejs/plugin-legacy` only injects usage-based core-js polyfills, no legacy chunks
   - UI framework: **Naive UI** (auto-imported via `unplugin-vue-components`)
   - `src/api.ts` — Axios-based API client; 401 clears login and goes home, 403 alerts and goes home
   - `src/router.ts` — Vue Router with auth guards
@@ -30,7 +31,7 @@ The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1
 
 - **`Caddyfile`** — serves SPA from `build/` and `/media`, proxies `/api*` and `/ws*` to the backend
 - **`docker-compose.yaml`** — `webpreview-web` (Caddy) and `webpreview-api` (Bun); `webpreview-db` (Postgres) exists only under the `migrate` profile for the one-time data migration
-- **`.github/workflows/deploy.yaml`** — on push to `main`: build client, rsync to server `build/`, then `git pull && docker compose up -d --build` on the server
+- **`.github/workflows/deploy.yaml`** — on push to `main`: build client with Bun, rsync to server `build/`, then `git pull && docker compose up -d --build` on the server
 
 ## Development Commands
 
@@ -51,9 +52,10 @@ Config comes from `server/.env` (see `server/.env.example`); dev DB is `server/d
 
 ### Client (from `client/`)
 ```bash
-npm run start        # Dev server (Rsbuild) on :3000
-npm run build        # Production build
-npm run fmt          # Format with Prettier
+bun install          # Install deps (bun.lock)
+bun run start        # Dev server (Vite, run on the Bun runtime) on :3000
+bun run build        # Production build (bun run build:staging for the school server)
+bun fmt              # Format with Bun's built-in formatter (config in bunfig.toml)
 ```
 Frontend env vars used at build time: `PUBLIC_BASE_URL`, `PUBLIC_WS_URL`, `PUBLIC_WEB_URL` (dev proxy target for `/media` and `/ws`).
 

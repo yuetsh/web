@@ -25,17 +25,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v7
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: client/package-lock.json
+          bun-version: 1.4.4
 
       - name: Build client
         working-directory: client
         run: |
-          npm install
-          npm run ${{ matrix.build_command }}
+          bun install --frozen-lockfile
+          bun run ${{ matrix.build_command }}
         env:
           CI: false
 

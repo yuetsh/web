@@ -9,7 +9,7 @@ BACKEND_PID=$!
 
 # 启动前端
 cd "$ROOT/client" || exit 1
-npm run start &
+bun run start &
 FRONTEND_PID=$!
 
 # 捕获退出信号，同时终止两个进程

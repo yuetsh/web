@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 interface ImportMetaEnv {
   readonly PUBLIC_WEB_URL: string
   readonly PUBLIC_BASE_URL: string
