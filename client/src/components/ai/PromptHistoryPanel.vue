@@ -1,143 +1,82 @@
 <template>
   <div class="history-panel">
-    <n-flex
-      class="history-toolbar"
-      align="center"
-      justify="space-between"
-      :wrap="false"
-    >
-      <n-text depth="3">共 {{ items.length }} 条历史对话</n-text>
+    <div class="toolbar">
+      <span class="muted">共 {{ items.length }} 轮 · 点一条就把那一版放回编辑器</span>
       <n-tooltip>
         <template #trigger>
-          <n-button
-            quaternary
-            circle
-            size="small"
-            :loading="loading"
-            aria-label="刷新历史对话"
-            @click="load(true)"
-          >
-            <template #icon>
-              <Icon icon="lucide:refresh-cw" />
-            </template>
+          <n-button quaternary size="small" :loading="loading" @click="load(true)">
+            <template #icon><Icon icon="lucide:refresh-cw" /></template>
           </n-button>
         </template>
-        刷新历史对话
+        刷新
       </n-tooltip>
-    </n-flex>
+    </div>
 
-    <n-spin v-if="loading" class="state" />
-    <n-empty
-      v-else-if="!items.length"
-      class="state"
-      description="暂无历史对话"
-    />
-    <n-scrollbar v-else class="history-scrollbar">
-      <n-flex vertical :size="12" class="history-list">
-        <n-card
-          v-for="(item, index) in items"
+    <n-spin v-if="loading && !items.length" class="state" />
+    <n-empty v-else-if="!items.length" class="state" description="还没有和 AI 对话过" />
+    <n-scrollbar v-else class="scroll">
+      <ol class="list">
+        <li
+          v-for="item in newestFirst"
           :key="item.assistant_message_id"
-          class="history-card"
-          :class="{
-            'is-selected':
-              selectedAssistantMessageId === item.assistant_message_id,
-          }"
-          size="small"
-          :bordered="true"
-          hoverable
-          :embedded="selectedAssistantMessageId === item.assistant_message_id"
-          :content-style="{ padding: 0 }"
+          :class="['item', { on: selectedAssistantMessageId === item.assistant_message_id }]"
           @click="selectItem(item)"
         >
-          <n-flex
-            class="history-main"
-            align="center"
-            justify="space-between"
-            :wrap="false"
-          >
-            <n-flex align="center" :wrap="false" :size="6">
-              <n-tag
-                round
-                size="small"
-                :bordered="false"
-                :type="
-                  selectedAssistantMessageId === item.assistant_message_id
-                    ? 'success'
-                    : 'default'
-                "
-              >
-                #{{ index + 1 }}
-              </n-tag>
-              <n-tag
-                size="small"
-                :type="item.source === 'edit' ? 'warning' : item.source === 'manual' ? 'info' : 'success'"
-              >
-                {{ sourceLabel(item.source) }}
-              </n-tag>
-            </n-flex>
-            <n-flex align="center" :wrap="false" :size="4">
-              <n-tag
-                v-if="selectedAssistantMessageId === item.assistant_message_id"
-                size="small"
-                type="success"
-                :bordered="false"
-              >
-                正在预览
-              </n-tag>
-              <n-text depth="3">
-                {{ parseTime(item.created, "YYYY-MM-DD HH:mm") }}
-              </n-text>
-              <n-tooltip placement="top">
-                <template #trigger>
-                  <n-button
-                    quaternary
-                    circle
-                    size="small"
-                    :loading="deletingId === item.assistant_message_id"
-                    :disabled="deletingId !== null"
-                    @click="deleteItem(item, $event)"
-                  >
-                    <template #icon>
-                      <Icon icon="lucide:trash-2" />
-                    </template>
-                  </n-button>
-                </template>
-                删除这条历史对话
-              </n-tooltip>
-            </n-flex>
-          </n-flex>
-          <div
-            class="prompt-markdown markdown-body"
-            v-html="renderMarkdown(item.prompt)"
-          />
-          <div class="thumbnail" aria-label="页面缩略图">
+          <div class="head">
+            <span class="num">{{ item.index }}</span>
+            <span :class="['src', `src-${item.source || 'conversation'}`]">
+              {{ sourceLabel(item.source) }}
+            </span>
+            <span v-if="item.prompt_level" class="level">{{ levelLabel(item.prompt_level) }}</span>
+            <span v-if="item.submission_id" class="submitted">交过</span>
+            <span class="time">{{ parseTime(item.created, "MM-DD HH:mm") }}</span>
+            <n-popconfirm @positive-click="deleteItem(item)">
+              <template #trigger>
+                <n-button
+                  quaternary
+                  size="tiny"
+                  class="del"
+                  :loading="deletingId === item.assistant_message_id"
+                  :disabled="deletingId !== null"
+                  @click.stop
+                >
+                  <template #icon><Icon icon="lucide:trash-2" :width="14" /></template>
+                </n-button>
+              </template>
+              <template v-if="item.submission_id">
+                这一版交过，删掉这轮对话后交的那一份也会一起删掉（有人评过分的删不了）。
+              </template>
+              <template v-else>删掉这一轮对话和它生成的网页？</template>
+            </n-popconfirm>
+          </div>
+          <div class="q markdown-body" v-html="renderMarkdown(item.prompt)"></div>
+          <div class="thumb">
             <iframe
               v-if="item.hasPage"
               title="页面缩略图"
               loading="lazy"
-              sandbox="allow-scripts"
-              referrerpolicy="no-referrer"
+              :sandbox="PREVIEW_SANDBOX"
               tabindex="-1"
               :srcdoc="item.previewDoc"
-            />
-            <n-empty v-else size="small" description="未生成页面" />
+            ></iframe>
+            <span v-else class="muted">这一轮没有生成网页</span>
           </div>
-        </n-card>
-      </n-flex>
+        </li>
+      </ol>
     </n-scrollbar>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 import { Icon } from "../../icons"
 import { useMessage } from "naive-ui"
 import { renderMarkdown } from "../../utils/markdown"
-import { sourceLabel } from "../../utils/helper"
+import { levelLabel, sourceLabel } from "../../utils/helper"
 import { Prompt } from "../../api"
 import type { PromptHistoryItem } from "../../utils/type"
 import { parseTime } from "../../utils/helper"
-import { buildPreviewDocument } from "../../utils/previewDocument"
+import { buildPreviewDocument, PREVIEW_SANDBOX } from "../../utils/previewDocument"
 
 const props = defineProps<{
   taskId: number
@@ -152,6 +91,8 @@ const emit = defineEmits<{
 }>()
 
 type HistoryViewItem = PromptHistoryItem & {
+  // 按时间先后的序号（从 1 开始）
+  index: number
   hasPage: boolean
   previewDoc: string
 }
@@ -165,12 +106,16 @@ let pendingRefresh = false
 
 const naiveMessage = useMessage()
 
-function toViewItem(item: PromptHistoryItem): HistoryViewItem {
+// 最新的放最上面，序号还是按时间先后
+const newestFirst = computed(() => [...items.value].reverse())
+
+function toViewItem(item: PromptHistoryItem, i: number): HistoryViewItem {
   const html = item.code_html ?? ""
   const css = item.code_css ?? ""
   const js = item.code_js ?? ""
   return {
     ...item,
+    index: i + 1,
     hasPage: !!(html.trim() || css.trim() || js.trim()),
     previewDoc: buildPreviewDocument({
       html,
@@ -181,15 +126,14 @@ function toViewItem(item: PromptHistoryItem): HistoryViewItem {
   }
 }
 
-async function deleteItem(item: HistoryViewItem, e: Event) {
-  e.stopPropagation()
+async function deleteItem(item: HistoryViewItem) {
   if (deletingId.value !== null) return
   deletingId.value = item.assistant_message_id
   try {
     await Prompt.deleteMessagePair(item.assistant_message_id)
-    items.value = items.value.filter(
-      (i) => i.assistant_message_id !== item.assistant_message_id,
-    )
+    items.value = items.value
+      .filter((i) => i.assistant_message_id !== item.assistant_message_id)
+      .map((i, idx) => ({ ...i, index: idx + 1 }))
     if (selectedAssistantMessageId.value === item.assistant_message_id) {
       selectedAssistantMessageId.value = null
     }
@@ -225,7 +169,7 @@ async function load(force = true) {
   try {
     const taskChanged = loadedTaskId !== props.taskId
     const data = await Prompt.listHistory(props.taskId)
-    items.value = data.map(toViewItem)
+    items.value = data.map((item, i) => toViewItem(item, i))
     if (
       taskChanged ||
       !items.value.some(
@@ -280,100 +224,164 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.history-toolbar {
+.toolbar {
   height: 42px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--n-border-color, var(--wp-line));
-  flex-shrink: 0;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--wp-line);
+}
+
+.muted {
+  font-size: 12px;
+  color: var(--wp-muted);
 }
 
 .state {
   margin: auto;
 }
 
-.history-scrollbar {
+.scroll {
   flex: 1;
   min-height: 0;
 }
 
-.history-list {
-  padding: 12px;
-}
-
-.history-card {
-  cursor: pointer;
-  overflow: hidden;
-}
-
-
-.history-card.is-selected {
-  --n-color: var(--wp-brand-soft);
-  box-shadow: 0 10px 24px rgba(13, 122, 82, 0.14);
-}
-
-.history-card.is-selected .history-main {
-  background: var(--wp-brand-soft);
-}
-
-.history-main {
-  padding: 10px 12px;
-  transition: background-color 0.18s ease;
-}
-
-.prompt-markdown {
+.list {
   margin: 0;
-  padding: 0 12px 12px;
-  color: var(--wp-ink);
-  font-size: 14px;
-  line-height: 1.6;
-  word-break: break-word;
-  background: transparent;
+  padding: 12px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.prompt-markdown :deep(p),
-.prompt-markdown :deep(ul),
-.prompt-markdown :deep(ol),
-.prompt-markdown :deep(blockquote),
-.prompt-markdown :deep(pre) {
-  margin-top: 0;
-  margin-bottom: 6px;
+.item {
+  border: 1px solid var(--wp-line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--wp-surface);
+  cursor: pointer;
 }
 
-.prompt-markdown :deep(:last-child) {
-  margin-bottom: 0;
+.item:hover {
+  border-color: var(--wp-faint);
 }
 
-.prompt-markdown :deep(pre) {
-  padding: 8px;
-  overflow-x: auto;
+.item.on {
+  border-color: var(--wp-brand);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px 4px 10px;
   font-size: 12px;
 }
 
-.prompt-markdown :deep(code) {
-  white-space: pre-wrap;
-  word-break: break-word;
+.num {
+  min-width: 18px;
+  font: 600 12px var(--wp-font-mono);
+  color: var(--wp-muted);
 }
 
-.thumbnail {
-  height: 160px;
-  border-top: 1px solid var(--n-border-color, var(--wp-line));
+.src,
+.level,
+.submitted {
+  padding: 0 6px;
+  border-radius: 4px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.src {
+  color: var(--wp-css);
+  background: var(--wp-css-soft);
+}
+
+.src-edit {
+  color: var(--wp-js);
+  background: var(--wp-js-soft);
+}
+
+.src-manual {
+  color: var(--wp-html);
+  background: var(--wp-html-soft);
+}
+
+.level {
+  color: var(--wp-ink);
   background: var(--wp-paper);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border: 1px solid var(--wp-line);
 }
 
-.history-card.is-selected .thumbnail {
-  border-top-color: var(--wp-brand-soft);
+.submitted {
+  color: var(--wp-brand);
   background: var(--wp-brand-soft);
 }
 
-.thumbnail iframe {
-  width: 100%;
-  height: 100%;
+.time {
+  margin-left: auto;
+  font: 12px var(--wp-font-mono);
+  color: var(--wp-muted);
+}
+
+.del {
+  color: var(--wp-faint);
+}
+
+.q {
+  max-height: 66px;
+  overflow: hidden;
+  padding: 0 10px 8px;
+  background: transparent;
+  color: var(--wp-ink);
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+  -webkit-mask-image: linear-gradient(#000 60%, transparent);
+  mask-image: linear-gradient(#000 60%, transparent);
+}
+
+.q :deep(p),
+.q :deep(ul),
+.q :deep(ol),
+.q :deep(pre),
+.q :deep(blockquote) {
+  margin: 0 0 4px;
+}
+
+.q :deep(pre) {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.q :deep(code) {
+  white-space: pre-wrap;
+}
+
+.thumb {
+  position: relative;
+  height: 140px;
+  display: grid;
+  place-items: center;
+  border-top: 1px solid var(--wp-line);
+  background: var(--wp-paper);
+  overflow: hidden;
+}
+
+/* 按 2 倍大小渲染再缩小 */
+.thumb iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 200%;
   border: 0;
-  background: var(--wp-surface);
+  transform: scale(0.5);
+  transform-origin: 0 0;
   pointer-events: none;
 }
 </style>
