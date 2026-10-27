@@ -37,10 +37,12 @@ const router = new Hono<Env>()
 router.route("/showcase", showcase)
 router.route("/review", review)
 
+const inShowcase = (id: string) => !!get(`SELECT 1 FROM submission_submissionaward WHERE submission_id = $id`, { id })
+
 // 学生能看的提交：自己的、进了作品展的、自己也交过的那道题上同学（任何班）的。老师都能看
 function canView(user: User, sub: { id: string; user_id: number; task_id: number }) {
   if (isStaff(user) || sub.user_id === user.id) return true
-  if (get(`SELECT 1 FROM submission_submissionaward WHERE submission_id = $id`, { id: sub.id })) return true
+  if (inShowcase(sub.id)) return true
   return !!get(
     `SELECT 1 FROM submission_submission s WHERE s.user_id = $me AND s.task_id = $task_id LIMIT 1`,
     { me: user.id, task_id: sub.task_id },
@@ -336,7 +338,9 @@ router.get("/random-for-rating", (c) => {
   }
   if (user.role === Role.NORMAL && todayRatingCount(user.id) >= 30) return c.json(null)
 
+  // 学生只抽自己也交过的题（和同学作品一样，没交过的题不能看别人的答案）
   const cond = `s.user_id != $me
+      ${user.role === Role.NORMAL ? "AND +s.task_id IN (SELECT task_id FROM submission_submission WHERE user_id = $me)" : ""}
       AND NOT EXISTS (SELECT 1 FROM submission_rating r WHERE r.submission_id = s.id AND r.user_id = $me)
       ${excludeId ? "AND s.id != $exclude" : ""}`
   const params = { me: user.id, ...(excludeId ? { exclude: excludeId } : {}) }
@@ -545,7 +549,12 @@ router.get("/:id", (c) => {
   const id = uuidParam(c, "id")
   requireView(user, id)
   const s = orNotFound(get(`${SUBMISSION_SELECT} ${SUBMISSION_FROM} WHERE s.id = $id`, { me: user.id, id }))
-  return c.json(submissionOut(s))
+  const out = submissionOut(s)
+  // 和同学作品一样：学生给同学打分之前不告诉作者和得分（作品展里的本来就署名）
+  if (!isStaff(user) && s.user_id !== user.id && !out.my_score && !inShowcase(id)) {
+    return c.json({ ...out, userid: null, username: null, score: null })
+  }
+  return c.json(out)
 })
 
 // 增加浏览次数（仅在全屏预览时调用）
@@ -562,6 +571,7 @@ router.put("/:id/score", async (c) => {
   const id = uuidParam(c, "id")
   const { score } = await body(c, z.object({ score: z.number().int().max(5) }))
   if (score <= 0) throw new HttpError(400, "分数不能为零")
+  requireView(user, id)
   const sub = orNotFound(
     get<{ user_id: number; username: string }>(
       `SELECT s.user_id, u.username FROM submission_submission s

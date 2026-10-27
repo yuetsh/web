@@ -1,68 +1,60 @@
 <template>
-  <div v-if="current || revealed" class="rating-card">
-    <div class="head">
-      <span>等 AI 的时候，给同学的作品打个分</span>
-      <n-button v-if="current" text size="tiny" @click="next(true)">跳过</n-button>
-    </div>
+  <n-modal
+    :show="!!(current || revealed)"
+    preset="card"
+    :title="done ? 'AI 写好了' : '等 AI 写代码的时候，给同学的作品打个分'"
+    :closable="false"
+    :mask-closable="false"
+    :close-on-esc="false"
+    :auto-focus="false"
+    style="width: 90vw; max-width: 1000px"
+  >
+    <template #header-extra>
+      <n-button v-if="done" type="primary" size="small" @click="close"
+        >看结果</n-button
+      >
+      <n-button v-else-if="current" text size="small" @click="next(true)"
+        >跳过这份</n-button
+      >
+    </template>
     <div v-if="revealed" class="revealed">
       刚才那份是 <b>{{ revealed }}</b> 的作品，谢谢你的评分
     </div>
-    <div v-else-if="current" class="body">
-      <button class="thumb" title="点击放大看" @click="showLarge = true">
+    <template v-else-if="current">
+      <div class="task">{{ current.task_title }}</div>
+      <div class="large">
         <iframe
           :key="current.submission_id"
           :sandbox="PREVIEW_SANDBOX"
           :srcdoc="doc"
-          tabindex="-1"
-          loading="lazy"
         ></iframe>
-      </button>
-      <div class="info">
-        <div class="task">{{ current.task_title }}</div>
-        <div class="rates">
-          <n-tooltip v-for="s in scores" :key="s.value">
-            <template #trigger>
-              <button class="rate" :disabled="rating" @click="rate(s.value)">
-                {{ s.value }}
-              </button>
-            </template>
-            {{ s.value }} 分：{{ s.label }}
-          </n-tooltip>
-        </div>
-        <div class="legend">1 没完成 · 3 基本完成 · 5 完成且有自己的想法</div>
       </div>
-    </div>
-  </div>
-  <n-modal
-    v-model:show="showLarge"
-    preset="card"
-    :title="current ? `同学的作品 · ${current.task_title}` : '同学的作品'"
-    style="width: 90vw; max-width: 1000px"
-  >
-    <div class="large">
-      <iframe :key="current?.submission_id" :sandbox="PREVIEW_SANDBOX" :srcdoc="doc"></iframe>
-    </div>
-    <div class="large-rates">
-      <button
-        v-for="s in scores"
-        :key="s.value"
-        class="rate wide"
-        :disabled="rating"
-        @click="rate(s.value)"
-      >
-        <b>{{ s.value }}</b> {{ s.label }}
-      </button>
-    </div>
+      <div class="rates">
+        <button
+          v-for="s in scores"
+          :key="s.value"
+          class="rate"
+          :disabled="rating"
+          @click="rate(s.value)"
+        >
+          <b>{{ s.value }}</b> {{ s.label }}
+        </button>
+      </div>
+    </template>
   </n-modal>
 </template>
 <script lang="ts" setup>
 import { computed, ref, watch } from "vue"
 import { useMessage } from "naive-ui"
 import { Submission } from "../../api"
-import { buildPreviewDocument, PREVIEW_SANDBOX } from "../../utils/previewDocument"
+import {
+  buildPreviewDocument,
+  PREVIEW_SANDBOX,
+} from "../../utils/previewDocument"
 import type { RandomRatingItem } from "../../utils/type"
 
-// AI 生成期间在对话里显示一份同学的作品让学生打分。打分前不显示作者，减少给熟人打高分
+// AI 生成期间弹框遮住页面，让学生给一份同学的作品打分（学生只关心结果，不用盯着代码一行行出来）。
+// 打分前不显示作者，减少给熟人打高分。AI 写完时正在看的这份不收走，换成“看结果”按钮
 const props = defineProps<{ active: boolean }>()
 const message = useMessage()
 
@@ -77,7 +69,7 @@ const scores = [
 const current = ref<RandomRatingItem | null>(null)
 const revealed = ref("")
 const rating = ref(false)
-const showLarge = ref(false)
+const done = ref(false)
 let seq = 0
 
 const doc = computed(() =>
@@ -103,6 +95,13 @@ async function next(skip = false) {
   }
 }
 
+function close() {
+  seq++
+  current.value = null
+  revealed.value = ""
+  done.value = false
+}
+
 async function rate(score: number) {
   if (!current.value) return
   rating.value = true
@@ -110,10 +109,12 @@ async function rate(score: number) {
     const res = await Submission.updateScore(current.value.submission_id, score)
     revealed.value = res.username ?? "同学"
     current.value = null
-    showLarge.value = false
+    const s = seq
     setTimeout(() => {
+      if (s !== seq) return
       revealed.value = ""
       if (props.active) next()
+      else done.value = false
     }, 1800)
   } catch (err: any) {
     message.error(err.response?.data?.detail ?? "打分失败，请重试")
@@ -125,83 +126,58 @@ async function rate(score: number) {
 watch(
   () => props.active,
   (active) => {
-    if (active) next()
-    else {
+    if (active) {
+      done.value = false
+      next()
+    } else if (current.value) {
       seq++
-      current.value = null
-      revealed.value = ""
-      showLarge.value = false
+      done.value = true
+    } else {
+      close()
     }
   },
   { immediate: true },
 )
 </script>
 <style scoped>
-.rating-card {
-  margin: 4px 0 16px;
-  padding: 10px 12px;
-  border: 1px solid var(--wp-line);
-  border-radius: 8px;
-  background: var(--wp-surface);
-}
-
-.head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: var(--wp-muted);
+.task {
+  font-weight: 600;
   margin-bottom: 8px;
 }
 
-.body {
-  display: grid;
-  grid-template-columns: 132px 1fr;
-  gap: 12px;
-  align-items: center;
-}
-
-.thumb {
-  position: relative;
-  width: 132px;
-  height: 84px;
-  padding: 0;
+.large {
+  height: 60vh;
   border: 1px solid var(--wp-line);
   border-radius: 6px;
   overflow: hidden;
-  cursor: zoom-in;
-  background: var(--wp-surface);
 }
 
-/* 按 4 倍大小渲染再缩小，看起来像网页缩略图 */
-.thumb iframe {
-  width: 528px;
-  height: 336px;
+.large iframe {
+  width: 100%;
+  height: 100%;
   border: 0;
-  transform: scale(0.25);
-  transform-origin: 0 0;
-  pointer-events: none;
-}
-
-.task {
-  font-weight: 600;
-  margin-bottom: 6px;
 }
 
 .rates {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .rate {
-  min-width: 32px;
-  padding: 4px 0;
+  flex: 1;
+  padding: 8px;
   border: 1px solid var(--wp-line);
   border-radius: 6px;
   background: var(--wp-surface);
   color: var(--wp-ink);
-  font: 600 13px var(--wp-font-mono);
+  font: 13px var(--wp-font-sans);
   cursor: pointer;
+}
+
+.rate b {
+  font-family: var(--wp-font-mono);
+  margin-right: 4px;
 }
 
 .rate:hover:not(:disabled) {
@@ -215,44 +191,10 @@ watch(
   outline-offset: 1px;
 }
 
-.legend {
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--wp-faint);
-}
-
 .revealed {
-  font-size: 13px;
+  padding: 48px 0;
+  text-align: center;
+  font-size: 15px;
   color: var(--wp-muted);
-}
-
-.large {
-  height: 65vh;
-  border: 1px solid var(--wp-line);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.large iframe {
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-
-.large-rates {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.rate.wide {
-  flex: 1;
-  padding: 8px;
-  font: 13px var(--wp-font-sans);
-}
-
-.rate.wide b {
-  font-family: var(--wp-font-mono);
-  margin-right: 4px;
 }
 </style>

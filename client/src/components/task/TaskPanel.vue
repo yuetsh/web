@@ -41,7 +41,7 @@
           quaternary
           @click="showPeers = true"
         >
-          同学作品
+          作品
         </n-button>
         <n-button v-if="roleSuper" size="small" quaternary @click="edit">
           <template #icon><Icon icon="lucide:edit" /></template>

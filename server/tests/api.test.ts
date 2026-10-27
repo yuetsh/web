@@ -171,6 +171,8 @@ describe("评分", () => {
     expect(row.score).toBeCloseTo(4.25)
     expect(row.zone).toBe("pending")
 
+    // 学生要自己也交过这道题才能打分
+    for (let i = 0; i < 3; i++) makeSubmission(get(`SELECT id FROM account_user WHERE username = 's${i}'`).id, task)
     for (let i = 0; i < 3; i++) {
       await (await client(`s${i}`))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 5 })
     }
@@ -256,8 +258,9 @@ describe("提交与删除", () => {
 
   test("删除一轮对话：连带提问和关联提交；被评过分的不能删", async () => {
     makeUser("stu")
-    makeUser("other")
+    const other = makeUser("other")
     const task = makeTask("T")
+    const otherSub = makeSubmission(other, task)
     const stu = await client("stu")
     const first = await stu("POST", "/api/submission/", { task_id: task, html: "<p>1", prompt: "第一版" })
     const second = await stu("POST", "/api/submission/", { task_id: task, html: "<p>2", prompt: "第二版" })
@@ -270,14 +273,16 @@ describe("提交与删除", () => {
     const res = await stu("DELETE", `/api/prompt/messages/${asstOf(first.json.id)}/pair`)
     expect(res.json).toEqual({ deleted: true, submission_deleted: true })
     expect(all(`SELECT content FROM prompt_message WHERE role = 'user'`)).toEqual([{ content: "第二版" }])
-    expect(all(`SELECT COUNT(*) AS n FROM submission_submission`)).toEqual([{ n: 1 }])
+    expect(all(`SELECT COUNT(*) AS n FROM submission_submission WHERE id != $id`, { id: otherSub })).toEqual([{ n: 1 }])
   })
 
   test("被评分的提交只有超管能删", async () => {
     const author = makeUser("author")
-    makeUser("other")
+    const other = makeUser("other")
     makeUser("boss", "super")
-    const sub = makeSubmission(author, makeTask("T"))
+    const task = makeTask("T")
+    const sub = makeSubmission(author, task)
+    makeSubmission(other, task)
     await (await client("other"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 4 })
     expect((await (await client("author"))("DELETE", `/api/submission/${uuid(sub)}`)).status).toBe(400)
     expect((await (await client("boss"))("DELETE", `/api/submission/${uuid(sub)}`)).status).toBe(200)
@@ -511,7 +516,10 @@ describe("同学作品与批改", () => {
 
     expect((await stu("GET", `/api/submission/${uuid(otherSub)}`)).status).toBe(403)
     makeSubmission(me, task)
-    expect((await stu("GET", `/api/submission/${uuid(mateSub)}`)).status).toBe(200)
+    const peer = await stu("GET", `/api/submission/${uuid(mateSub)}`)
+    expect(peer.status).toBe(200)
+    // 打分前不显示作者和得分
+    expect(peer.json).toMatchObject({ userid: null, username: null, score: null })
     // 交过以后外班的也能看
     expect((await stu("GET", `/api/submission/${uuid(otherSub)}`)).status).toBe(200)
     // 没交过的题仍然看不到
@@ -533,6 +541,11 @@ describe("同学作品与批改", () => {
     const mateSub = makeSubmission(mate, task)
     const stu = await client("me")
 
+    // 没交过的同学既不能打分，也抽不到这道题
+    const other = await client("other")
+    expect((await other("PUT", `/api/submission/${uuid(mateSub)}/score`, { score: 3 })).status).toBe(403)
+    expect((await other("GET", "/api/submission/random-for-rating")).json).toBeNull()
+
     let peers = await stu("GET", `/api/submission/review/peers/${task}`)
     expect(peers.json.items).toHaveLength(1)
     expect(peers.json.items[0]).toMatchObject({ id: uuid(mateSub), username: null, score: null, my_score: 0 })
@@ -541,17 +554,24 @@ describe("同学作品与批改", () => {
     expect(rated.json.username).toBe("mate")
     peers = await stu("GET", `/api/submission/review/peers/${task}`)
     expect(peers.json.items[0]).toMatchObject({ username: "mate", my_score: 4 })
-
-    const random = await (await client("other"))("GET", "/api/submission/random-for-rating")
-    expect(random.json.username).toBeUndefined()
+    expect((await stu("GET", `/api/submission/${uuid(mateSub)}`)).json).toMatchObject({ username: "mate" })
 
     // 默认只看本班；scope=all 能看到外班，标着班级，同样匿名
     const otherSub = makeSubmission(get(`SELECT id FROM account_user WHERE username = 'other'`).id, task)
+    const random = await other("GET", "/api/submission/random-for-rating")
+    expect(random.json.submission_id).toBeDefined()
+    expect(random.json.username).toBeUndefined()
     const all = await stu("GET", `/api/submission/review/peers/${task}?scope=all`)
     expect(all.json.items.map((w: any) => [w.classname, w.username])).toContainEqual(["c2", null])
     expect(all.json.items.map((w: any) => w.id)).toContain(uuid(otherSub))
     const mine = await stu("GET", `/api/submission/review/peers/${task}`)
     expect(mine.json.items.map((w: any) => w.classname)).toEqual(["c1"])
+
+    // 老师没交过也能看，直接显示作者
+    makeUser("t", "admin")
+    const teacher = await (await client("t"))("GET", `/api/submission/review/peers/${task}`)
+    expect(teacher.json.locked).toBe(false)
+    expect(teacher.json.items.map((w: any) => w.username).sort()).toEqual(["mate", "me", "other"])
   })
 
   test("老师按班级 × 任务看作品墙；课上展示用 flag", async () => {

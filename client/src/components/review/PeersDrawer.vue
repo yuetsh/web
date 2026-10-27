@@ -1,6 +1,6 @@
 <template>
   <n-drawer v-model:show="show" :width="600" placement="right">
-    <n-drawer-content title="同学作品" :native-scrollbar="false">
+    <n-drawer-content title="作品" :native-scrollbar="false">
       <n-spin :show="loading">
         <n-result
           v-if="data?.locked"
@@ -12,7 +12,11 @@
         <template v-else-if="data">
           <n-flex justify="space-between" align="center" class="bar">
             <span class="hint">
-              同学们在这道题上最新的作品。打分之前不显示是谁做的，打完分才显示。
+              {{
+                roleStaff
+                  ? "学生们在这道题上最新的作品。"
+                  : "同学们在这道题上最新的作品。打分之前不显示是谁做的，打完分才显示。"
+              }}
             </span>
             <n-radio-group v-model:value="scope" size="small">
               <n-radio-button value="class">本班</n-radio-button>
@@ -69,6 +73,7 @@
 import { ref, watch } from "vue"
 import { useMessage } from "naive-ui"
 import { Review, Submission } from "../../api"
+import { roleStaff } from "../../store/user"
 import { buildPreviewDocument, PREVIEW_SANDBOX } from "../../utils/previewDocument"
 import type { PeerWork, PeerWorks } from "../../utils/type"
 

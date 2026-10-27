@@ -135,16 +135,19 @@ router.get("/class", (c) => {
 })
 
 // 学生看同学在这道题上的作品：自己交过才开放；自己打分之前不显示作者和得分。
-// scope=class 只看本班（默认，一个班几十份），scope=all 看全校所有班
+// 老师不受这两条限制。scope=class 只看本班（默认，一个班几十份），scope=all 看全校所有班
 router.get("/peers/:task_id", (c) => {
   const user = requireUser(c)
   const taskId = intParam(c, "task_id")
   const { scope } = query(c, z.object({ scope: z.enum(["class", "all"]).default("class") }))
   orNotFound(get(`SELECT 1 FROM task_task WHERE id = $id`, { id: taskId }), "任务不存在")
-  const submitted = get(
-    `SELECT 1 FROM submission_submission WHERE user_id = $me AND task_id = $task_id LIMIT 1`,
-    { me: user.id, task_id: taskId },
-  )
+  const staff = isStaff(user)
+  const submitted =
+    staff ||
+    get(`SELECT 1 FROM submission_submission WHERE user_id = $me AND task_id = $task_id LIMIT 1`, {
+      me: user.id,
+      task_id: taskId,
+    })
   if (!submitted) return c.json({ locked: true, items: [] })
   const byClass = scope === "class" && !!user.classname
   const members = `SELECT id FROM account_user
@@ -162,7 +165,7 @@ router.get("/peers/:task_id", (c) => {
   const items = [...rows.values()]
     .sort((a, b) => (a.created < b.created ? 1 : -1))
     .map((r) => {
-      const rated = (r.my_score || 0) > 0
+      const rated = staff || (r.my_score || 0) > 0
       const p = people.get(r.user_id)
       return {
         id: uuidOut(r.id),

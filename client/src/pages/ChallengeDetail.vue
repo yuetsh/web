@@ -15,7 +15,7 @@
       </n-tag>
     </template>
     <template #tools>
-      <n-button quaternary size="small" @click="showPeers = true">同学作品</n-button>
+      <n-button quaternary size="small" @click="showPeers = true">作品</n-button>
       <n-button v-if="assets.length" quaternary size="small" @click="showAssets = true">
         素材
       </n-button>
