@@ -1,59 +1,48 @@
 <template>
   <main class="creation-home">
-    <n-flex
-      justify="space-between"
-      align="flex-end"
-      style="margin-bottom: 32px"
-    >
+    <header class="head">
       <div>
-        <n-h2 style="margin: 0">自由创作</n-h2>
-        <n-text depth="3">自己定一个主题，和 AI 一起把它做出来</n-text>
+        <h2>自由创作</h2>
+        <p class="sub">自己定一个主题，和 AI 一起把它做出来。不用交，也不打分</p>
       </div>
-      <n-button type="primary" @click="openCreate">
-        <template #icon>
-          <Icon icon="lucide:plus" :width="16" />
-        </template>
+      <n-button type="primary" @click="openCreate()">
+        <template #icon><Icon icon="lucide:plus" /></template>
         新建主题
       </n-button>
-    </n-flex>
+    </header>
 
     <n-spin :show="loading">
-      <n-empty
-        v-if="!loading && !creations.length"
-        description="还没有创作，点右上角新建一个主题吧"
-        style="margin-top: 72px"
-      />
-      <div v-else class="card-grid">
-        <n-card
-          v-for="item in creations"
-          :key="item.display"
-          class="creation-card"
-          hoverable
-          @click="open(item)"
-        >
-          <template #header>
-            <n-ellipsis style="max-width: 100%">{{ item.title }}</n-ellipsis>
-          </template>
-          <template #header-extra>
-            <n-flex :size="4" align="center">
-              <n-tag v-if="item.has_code" type="success" size="small">
-                已有作品
-              </n-tag>
-              <n-button text @click.stop="remove(item)">
-                <Icon icon="lucide:trash-2" :width="15" />
-              </n-button>
-            </n-flex>
-          </template>
-          <n-ellipsis :line-clamp="2" class="creation-desc">
-            {{ item.content || "还没写主题描述" }}
-          </n-ellipsis>
-          <template #footer>
-            <n-text depth="3" style="font-size: 12px">
-              更新于 {{ formatTime(item.modified) }}
-            </n-text>
-          </template>
-        </n-card>
+      <div v-if="!loading && !creations.length" class="empty">
+        <p>还没有创作。不知道做什么？从这些开始：</p>
+        <div class="ideas">
+          <button v-for="idea in IDEAS" :key="idea.title" class="idea" @click="openCreate(idea)">
+            <b>{{ idea.title }}</b>
+            <span>{{ idea.content }}</span>
+          </button>
+        </div>
       </div>
+      <ol v-else class="list">
+        <li v-for="item in creations" :key="item.display">
+          <router-link class="row" :to="{ name: 'creation', params: { display: item.display } }">
+            <span class="main">
+              <span class="title">{{ item.title }}</span>
+              <span class="desc">{{ item.content || "还没写主题描述" }}</span>
+            </span>
+            <span :class="['state', { done: item.has_code }]">
+              {{ item.has_code ? "已有作品" : "还没开始" }}
+            </span>
+            <span class="time">{{ formatTime(item.modified) }}</span>
+            <n-popconfirm @positive-click="remove(item)">
+              <template #trigger>
+                <n-button text class="del" title="删除" @click.prevent.stop>
+                  <Icon icon="lucide:trash-2" :width="15" />
+                </n-button>
+              </template>
+              删除「{{ item.title }}」？和它相关的对话也会一起删掉。
+            </n-popconfirm>
+          </router-link>
+        </li>
+      </ol>
     </n-spin>
 
     <n-modal
@@ -65,6 +54,7 @@
       <n-form>
         <n-form-item label="主题名称">
           <n-input
+            ref="titleRef"
             v-model:value="form.title"
             placeholder="例如：我的番茄钟"
             maxlength="100"
@@ -98,22 +88,30 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue"
+import { nextTick, onMounted, reactive, ref } from "vue"
 import { useRouter } from "vue-router"
-import { useDialog, useMessage } from "naive-ui"
+import { useMessage } from "naive-ui"
 import { Icon } from "../icons"
 import { Creation } from "../api"
 import type { CreationSlim } from "../utils/type"
 
 const router = useRouter()
 const message = useMessage()
-const dialog = useDialog()
 
 const loading = ref(true)
 const creating = ref(false)
 const showCreate = ref(false)
 const creations = ref<CreationSlim[]>([])
 const form = reactive({ title: "", content: "" })
+const titleRef = ref<{ focus: () => void } | null>(null)
+
+// 一个创作都没有时给几个主题点子，点了带进新建框
+const IDEAS = [
+  { title: "番茄钟", content: "25 分钟倒计时，能开始、暂停、重置，时间到了提醒我休息" },
+  { title: "我的个人主页", content: "头像、自我介绍、爱好，再放几张喜欢的图片" },
+  { title: "点击小游戏", content: "方块随机出现，点中加分，30 秒后显示得分" },
+  { title: "今日待办", content: "能添加、勾选完成、删除待办，刷新后还在" },
+]
 
 function formatTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
@@ -124,14 +122,11 @@ function formatTime(value: string) {
   })
 }
 
-function open(item: CreationSlim) {
-  router.push({ name: "creation", params: { display: item.display } })
-}
-
-function openCreate() {
-  form.title = ""
-  form.content = ""
+function openCreate(idea?: { title: string; content: string }) {
+  form.title = idea?.title ?? ""
+  form.content = idea?.content ?? ""
   showCreate.value = true
+  nextTick(() => titleRef.value?.focus())
 }
 
 async function submit() {
@@ -149,24 +144,14 @@ async function submit() {
   }
 }
 
-function remove(item: CreationSlim) {
-  dialog.warning({
-    title: "删除主题",
-    content: `确定删除「${item.title}」吗？和它相关的对话也会一起删除。`,
-    positiveText: "删除",
-    negativeText: "取消",
-    onPositiveClick: async () => {
-      try {
-        await Creation.remove(item.display)
-        creations.value = creations.value.filter(
-          (c) => c.display !== item.display,
-        )
-        message.success("已删除")
-      } catch {
-        message.error("删除失败，请重试")
-      }
-    },
-  })
+async function remove(item: CreationSlim) {
+  try {
+    await Creation.remove(item.display)
+    creations.value = creations.value.filter((c) => c.display !== item.display)
+    message.success("已删除")
+  } catch {
+    message.error("删除失败，请重试")
+  }
 }
 
 onMounted(async () => {
@@ -180,23 +165,153 @@ onMounted(async () => {
 
 <style scoped>
 .creation-home {
-  max-width: 1180px;
+  max-width: 880px;
   margin: 0 auto;
-  padding: 32px 20px 48px;
+  padding: 28px 20px 48px;
 }
 
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
   gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
-.creation-card {
+h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.sub {
+  margin: 4px 0 0;
+  color: var(--wp-muted);
+  font-size: 13px;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--wp-line);
+  border-radius: 10px;
+  background: var(--wp-surface);
+  overflow: hidden;
+}
+
+.list li + li {
+  border-top: 1px solid var(--wp-line);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto 96px 24px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  color: var(--wp-ink);
+  text-decoration: none;
+}
+
+.row:hover {
+  background: var(--wp-paper);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--wp-brand);
+  outline-offset: -2px;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--wp-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.state {
+  font-size: 12px;
+  color: var(--wp-faint);
+}
+
+.state.done {
+  color: var(--wp-brand);
+}
+
+.time {
+  font: 12px var(--wp-font-mono);
+  color: var(--wp-muted);
+  text-align: right;
+}
+
+.del {
+  color: var(--wp-faint);
+}
+
+.del:hover {
+  color: var(--wp-bad);
+}
+
+.empty {
+  padding: 28px 24px;
+  border: 1px dashed var(--wp-line);
+  border-radius: 10px;
+  background: var(--wp-surface);
+}
+
+.empty p {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: var(--wp-muted);
+}
+
+.ideas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.idea {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--wp-line);
+  border-radius: 8px;
+  background: var(--wp-paper);
+  color: var(--wp-ink);
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
-.creation-desc {
-  font-size: 13px;
+.idea:hover {
+  border-color: var(--wp-brand);
+}
+
+.idea b {
+  font-size: 14px;
+}
+
+.idea span {
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--wp-muted);
 }
 </style>
