@@ -59,9 +59,12 @@ export interface ChatMessage {
   content: string
 }
 
+// DeepSeek（deepseek-flash）默认先思考再回答，思考的内容在 reasoning_content 里，也算输出 token；
+// 思考模式下 temperature 不起作用。thinking 只发给 DeepSeek，豆包不传
 interface CompletionOptions {
   model?: string
   stream: boolean
+  thinking?: boolean
   maxTokens?: number
   temperature?: number
   signal?: AbortSignal
@@ -82,6 +85,7 @@ function buildRequest(messages: ChatMessage[], opts: CompletionOptions) {
     messages,
     stream: opts.stream,
   }
+  if (!ark && opts.thinking !== undefined) body.thinking = { type: opts.thinking ? "enabled" : "disabled" }
   if (opts.maxTokens) body.max_tokens = opts.maxTokens
   if (opts.temperature !== undefined) body.temperature = opts.temperature
   const apiKey = ark ? config.arkApiKey : config.llmApiKey
@@ -109,8 +113,7 @@ async function ensureOk(res: Response) {
 // 读取 OpenAI 兼容接口的 SSE 流，逐段产出文本
 async function* streamCompletion(
   messages: ChatMessage[],
-  model?: string,
-  signal?: AbortSignal,
+  { model, thinking, signal }: { model?: string; thinking?: boolean; signal?: AbortSignal },
 ): AsyncGenerator<string> {
   // 带思考的模型生成整页代码可能超过两分钟，只要一直有数据就不该中断
   const idle = new AbortController()
@@ -125,6 +128,7 @@ async function* streamCompletion(
     const res = await buildRequest(messages, {
       model,
       stream: true,
+      thinking,
       signal: AbortSignal.any(signals),
       timeoutMs: STREAM_MAX_MS,
     })
@@ -141,6 +145,7 @@ async function* streamCompletion(
         if (data === "[DONE]") return true
         const json = JSON.parse(data)
         if (json.error) throw new Error(json.error.message ?? JSON.stringify(json.error))
+        // 思考阶段只有 delta.reasoning_content，不发给学生（它也会重置空闲计时）
         const content = json.choices?.[0]?.delta?.content
         if (content) yield content
       }
@@ -187,29 +192,31 @@ export function userFacingError(e: unknown) {
   return status ? `AI 服务出错（${status}），请稍后重试` : "AI 服务出错，请稍后重试"
 }
 
+// 生成整页代码：开着思考，质量优先
 export function streamChat(history: ChatMessage[], model?: string, signal?: AbortSignal) {
-  return streamCompletion(
-    [{ role: "system", content: SYSTEM_PROMPT }, ...trimHistory(history)],
-    chatModel(model),
+  return streamCompletion([{ role: "system", content: SYSTEM_PROMPT }, ...trimHistory(history)], {
+    model: chatModel(model),
+    thinking: true,
     signal,
-  )
+  })
 }
 
+// 引导只是简短追问，不用思考，回得快
 export function streamGuidance(history: ChatMessage[], signal?: AbortSignal) {
-  return streamCompletion(
-    [{ role: "system", content: GUIDANCE_SYSTEM_PROMPT }, ...history],
-    undefined,
+  return streamCompletion([{ role: "system", content: GUIDANCE_SYSTEM_PROMPT }, ...history], {
+    thinking: false,
     signal,
-  )
+  })
 }
 
 export async function complete(
   messages: ChatMessage[],
-  opts: { model?: string; maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
+  opts: { model?: string; thinking?: boolean; maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
 ): Promise<string> {
   const res = await buildRequest(messages, {
     model: opts.model ?? config.llmModel,
     stream: false,
+    thinking: opts.thinking,
     maxTokens: opts.maxTokens,
     temperature: opts.temperature,
     timeoutMs: opts.timeoutMs,

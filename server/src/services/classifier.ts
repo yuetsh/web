@@ -37,8 +37,8 @@ async function callLlm(content: string): Promise<number | null> {
         { role: "system", content: CLASSIFY_SYSTEM_PROMPT },
         { role: "user", content },
       ],
-      // 同一句提示词要得到同一个层级
-      { maxTokens: 10, temperature: 0, timeoutMs: 30_000 },
+      // 只回一个数字，不用思考；关了思考 temperature 才生效，同一句提示词得到同一个层级
+      { thinking: false, maxTokens: 10, temperature: 0, timeoutMs: 30_000 },
     )
     const match = /[1-6]/.exec(text)
     if (!match) {

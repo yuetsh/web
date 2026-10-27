@@ -5,6 +5,7 @@ import {
   extractCode,
   parseGuidanceResponse,
   streamChat,
+  streamGuidance,
   trimHistory,
   userFacingError,
 } from "../src/services/llm"
@@ -77,12 +78,13 @@ test("CSV 转义", () => {
 })
 
 describe("streamChat", () => {
-  test("不认识的模型换成默认模型，最后一行没有换行也能读到", async () => {
+  test("不认识的模型换成默认模型，最后一行没有换行也能读到；生成代码开思考，引导不开", async () => {
     let model = ""
+    let thinking: unknown
     const server = Bun.serve({
       port: 0,
       async fetch(req) {
-        model = ((await req.json()) as any).model
+        ;({ model, thinking } = (await req.json()) as any)
         const line = (s: string) => `data: ${JSON.stringify({ choices: [{ delta: { content: s } }] })}`
         // 一行拆在两个分块之间，最后一行不带换行
         const body = `${line("你好")}\n\n${line("世")}\n${line("界")}`
@@ -108,6 +110,9 @@ describe("streamChat", () => {
       for await (const s of streamChat([{ role: "user", content: "hi" }], "deepseek-v4-flash-thinking")) out += s
       expect(out).toBe("你好世界")
       expect(model).toBe(config.llmModel)
+      expect(thinking).toEqual({ type: "enabled" })
+      for await (const _ of streamGuidance([{ role: "user", content: "hi" }]));
+      expect(thinking).toEqual({ type: "disabled" })
     } finally {
       Object.assign(config, saved)
       server.stop(true)
