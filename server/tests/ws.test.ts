@@ -192,6 +192,27 @@ describe("WebSocket 代码生成", () => {
     c.ws.close()
   })
 
+  test("挑战的题目要求作为对照清单发给 AI，自由创作不发", async () => {
+    const { task, token } = await setup()
+    run(`UPDATE task_task SET content = $c WHERE id = $id`, { c: "做一个计时器，有开始和暂停按钮", id: task })
+    const c = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    await c.next("init")
+    c.ws.send(JSON.stringify({ type: "message", content: "做个页面" }))
+    await c.next("complete")
+    expect(lastRequest.messages[0].content).toContain("它是对照清单")
+    expect(lastRequest.messages[0].content).toContain("题目要求：做一个计时器，有开始和暂停按钮")
+    c.ws.close()
+
+    const creation = makeTask("我的作品", "creation", 2)
+    run(`UPDATE task_task SET content = '我想做一个相册' WHERE id = $id`, { id: creation })
+    const d = (await connect(`/ws/prompt/${creation}/?token=${token}`))!
+    await d.next("init")
+    d.ws.send(JSON.stringify({ type: "message", content: "做个页面" }))
+    await d.next("complete")
+    expect(lastRequest.messages[0].content).not.toContain("题目要求")
+    d.ws.close()
+  })
+
   test("token 无效或任务不存在时握手失败", async () => {
     const { task, token } = await setup()
     expect(await connect(`/ws/prompt/${task}/?token=bad`)).toBeNull()

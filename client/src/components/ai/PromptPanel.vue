@@ -87,7 +87,7 @@
           v-model:value="input"
           type="textarea"
           :autosize="{ minRows: 1, maxRows: 4 }"
-          placeholder="描述你想要的网页效果..."
+          placeholder="用你自己的话说说想做成什么样…"
           :disabled="streaming"
           style="flex: 1; min-width: 0"
           @keydown.enter.exact.prevent="send"

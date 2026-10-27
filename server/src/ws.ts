@@ -3,6 +3,7 @@ import { all, get, run, iso, uuidOut } from "./db"
 import { userFromAccessToken, type User } from "./auth"
 import {
   canAccessTask,
+  challengeBrief,
   codeAsMarkdown,
   getOrCreateActiveConversation,
   guidanceContext,
@@ -132,7 +133,8 @@ async function handlePrompt(ws: WS, data: any) {
     }))
     let full: string
     try {
-      full = await streamToClient(ws, streamChat(history, model, ws.data.abort.signal))
+      const brief = challengeBrief(ws.data.taskId)
+      full = await streamToClient(ws, streamChat(history, model, ws.data.abort.signal, brief))
     } catch (e) {
       // 客户端自己断开导致的中止不算出错
       if (!ws.data.closed) send(ws, { type: "error", content: userFacingError(e) })

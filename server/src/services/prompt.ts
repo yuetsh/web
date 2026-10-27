@@ -102,15 +102,28 @@ export function codeAsMarkdown(code: {
 // 题目要求去掉图片、压成一段，太长的截掉
 const BRIEF_CHARS = 800
 
-export function briefOf(content: string) {
+export function briefOf(content: string, max = BRIEF_CHARS) {
   const text = content
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .replace(/\s+/g, " ")
     .trim()
-  return text.length > BRIEF_CHARS ? text.slice(0, BRIEF_CHARS) + "……" : text
+  return clipTo(text, max)
 }
 
-const clipTo = (text: string, n: number) => (text.length > n ? text.slice(0, n) + "……" : text)
+function clipTo(text: string, n: number) {
+  return text.length > n ? text.slice(0, n) + "……" : text
+}
+
+// 挑战的题目要求，给生成网页的 AI 当对照清单（见 llm.ts 的 BRIEF_RULES）；要逐条对照，不能截得太短。
+// 自由创作的题目是学生自己写的介绍，不用对照，返回 null
+export function challengeBrief(taskId: number) {
+  const task = get<{ title: string; content: string }>(
+    `SELECT title, content FROM task_task WHERE id = $id AND task_type = 'challenge'`,
+    { id: taskId },
+  )
+  const brief = task && briefOf(task.content, 4000)
+  return brief ? `题目：${task.title}\n\n题目要求：${brief}` : null
+}
 
 // “帮我写清楚”的教练要知道题目和学生已经做到哪了，才分得清照搬题目和自己的想法：
 // 题目要求、学生最近几次对 AI 说的话、AI 上一次的说明（代码去掉）

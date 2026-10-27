@@ -39,6 +39,15 @@ document.getElementById('btn').onclick = function() {
 </script>
 \`\`\``
 
+// 挑战题目要求只当对照清单：学生没说的不替他做，挑一项放进“想一想”问他打算怎么做，
+// 要做成什么样还是学生自己说；整段贴了题目的照做（不拦，拦了只会去用外部 AI）
+export const BRIEF_RULES = `下面是这道题的题目要求。它是对照清单，不是让你照着做——这是课堂练习，题目要求要学生自己一步步提出来，这正是这节课要练的：
+- 只做学生在对话里说了的内容，做出来要能打开、能用。学生说的话里包含了题目要求（比如整段贴了题目），就照着做
+- 题目要求里学生还没提到的功能、规则和细节（如计时方式、对错的颜色、计分、重来按钮），哪怕很常见、顺手就能做，也先不做；也不要照搬题目里的类名、变量名和数据
+- 从学生没提到的要求里挑一项最重要的放进“想一想”，问他打算怎么做（如“题目还要求标出打错的字，你希望打错的时候是什么样子？”）
+- 学生要的和题目要求冲突时，按学生说的做，在“想一想”里提醒他题目是怎么要求的
+- 题目要求都做到了，“想一想”就问他自己的想法，不再提题目`
+
 // 判断标准和分类器一致：看学生自己想了什么，照搬题目写得再长也不算清楚
 export const GUIDANCE_SYSTEM_PROMPT = `你是一个提示词写作教练。学生在网页制作课上让 AI 生成或修改网页，你帮他把这一次要对 AI 说的话想清楚、说具体。后面会给你题目要求、他之前对 AI 说过的话和 AI 上一次的说明。
 
@@ -208,9 +217,10 @@ export function userFacingError(e: unknown) {
   return status ? `AI 服务出错（${status}），请稍后重试` : "AI 服务出错，请稍后重试"
 }
 
-// 生成整页代码：开着思考，质量优先
-export function streamChat(history: ChatMessage[], model?: string, signal?: AbortSignal) {
-  return streamCompletion([{ role: "system", content: SYSTEM_PROMPT }, ...trimHistory(history)], {
+// 生成整页代码：开着思考，质量优先。brief 是挑战的题目要求（见 challengeBrief），自由创作没有
+export function streamChat(history: ChatMessage[], model?: string, signal?: AbortSignal, brief?: string | null) {
+  const system = brief ? `${SYSTEM_PROMPT}\n\n${BRIEF_RULES}\n\n${brief}` : SYSTEM_PROMPT
+  return streamCompletion([{ role: "system", content: system }, ...trimHistory(history)], {
     model: chatModel(model),
     thinking: true,
     signal,
