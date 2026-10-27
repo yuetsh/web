@@ -41,6 +41,10 @@ function itemManageOut(r: any) {
     awarded_at: iso(r.awarded_at),
     has_prompt_chain: bool(r.has_prompt_chain),
     is_stale: bool(r.is_stale),
+    // 管理页的缩略图要用
+    html: r.html,
+    css: r.css,
+    js: r.js,
   }
 }
 
@@ -162,32 +166,6 @@ router.delete("/manage/awards/:award_id", (c) => {
     run(`DELETE FROM submission_award WHERE id = $id`, { id })
   })
   return c.json({ message: "删除成功" })
-})
-
-router.get("/manage/submissions/:submission_id", (c) => {
-  requireAdmin(c)
-  const id = uuidParam(c, "submission_id")
-  const s = orNotFound(
-    get(
-      `SELECT s.id, u.username, t.title AS task_title, t.display AS task_display, t.task_type,
-         s.score, s.view_count, ${HAS_CHAIN}
-       FROM submission_submission s
-       JOIN account_user u ON u.id = s.user_id
-       JOIN task_task t ON t.id = s.task_id
-       WHERE s.id = $id`,
-      { id },
-    ),
-  )
-  return c.json({
-    submission_id: uuidOut(s.id),
-    username: s.username,
-    task_title: s.task_title,
-    task_display: s.task_display,
-    task_type: s.task_type,
-    score: s.score,
-    view_count: s.view_count,
-    has_prompt_chain: bool(s.has_prompt_chain),
-  })
 })
 
 router.get("/manage/awards/:award_id/items", (c) => {

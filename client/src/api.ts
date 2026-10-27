@@ -17,7 +17,6 @@ import type {
   AwardItemManageOut,
   GradebookOut,
   GradebookQuery,
-  ShowcaseSubmissionLookupOut,
   ShowcaseDetail,
   PromptRound,
   RandomRatingItem,
@@ -516,15 +515,6 @@ export const Showcase = {
 
   async listAwardItems(id: number): Promise<AwardItemManageOut[]> {
     const res = await http.get(`/submission/showcase/manage/awards/${id}/items`)
-    return res.data
-  },
-
-  async findSubmissionForAward(
-    submissionId: string,
-  ): Promise<ShowcaseSubmissionLookupOut> {
-    const res = await http.get(
-      `/submission/showcase/manage/submissions/${submissionId}`,
-    )
     return res.data
   },
 

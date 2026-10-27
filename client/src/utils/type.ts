@@ -302,17 +302,6 @@ export interface AwardItemUpdateIn {
   sort_order: number
 }
 
-export interface ShowcaseSubmissionLookupOut {
-  submission_id: string
-  username: string
-  task_title: string
-  task_display: number
-  task_type: TASK_TYPE
-  score: number
-  view_count: number
-  has_prompt_chain: boolean
-}
-
 export interface AwardItemManageOut {
   id: number
   submission_id: string
@@ -326,6 +315,9 @@ export interface AwardItemManageOut {
   awarded_at: string
   has_prompt_chain: boolean
   is_stale: boolean
+  html: string | null
+  css: string | null
+  js: string | null
 }
 
 export interface ShowcaseDetail {
