@@ -30,8 +30,9 @@ export function buildPreviewDocument({
     <title>预览</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     ${assetBaseUrl ? `<base href="${assetBaseUrl}">` : ""}
-    <style>${css}</style>
+    <!-- normalize 要在学生的样式前面，否则同样写法的规则（body、h1 的边距等）会被它盖掉 -->
     <link rel="stylesheet" href="/normalize.min.css" />
+    <style>${css}</style>
   </head>
   <body>
     ${html}
