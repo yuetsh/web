@@ -102,7 +102,8 @@
     v-if="current"
     v-model:show="showChain"
     :submission-id="current.id"
-    :username="current.username"
+    :title="`${current.task_display}. ${current.task_title}`"
+    :asset-base-url="`/media/tasks/${current.task_type}/${current.task_display}/`"
   />
 </template>
 

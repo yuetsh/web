@@ -120,13 +120,18 @@
         </section>
 
         <section>
-          <h4>提示词 <span class="muted" v-if="chain.length">· {{ chain.length }} 轮</span></h4>
+          <n-flex justify="space-between" align="center" class="chain-head">
+            <h4>提示词 <span class="muted" v-if="chain.length">· {{ chain.length }} 轮</span></h4>
+            <n-button v-if="chain.length" size="tiny" quaternary @click="showChain = true">
+              逐轮看网页
+            </n-button>
+          </n-flex>
           <div v-if="!chain.length" class="muted">这份提交没有关联的提示词</div>
           <ol class="chain">
             <li v-for="(r, i) in chain" :key="i">
               <n-flex :size="6" align="center">
                 <span class="src">{{ sourceLabel(r.source) }}</span>
-                <span v-if="r.prompt_level" class="level">L{{ r.prompt_level }}</span>
+                <span v-if="r.prompt_level" class="level">{{ levelLabel(r.prompt_level) }}</span>
               </n-flex>
               <div class="q">{{ r.question }}</div>
             </li>
@@ -135,6 +140,13 @@
        </div>
       </div>
     </n-spin>
+    <ChainModal
+      v-if="sub"
+      v-model:show="showChain"
+      :submission-id="sub.id"
+      :title="`${sub.username} · ${sub.task_title}`"
+      :asset-base-url="`/media/tasks/${sub.task_type}/${sub.task_display}/`"
+    />
   </div>
 </template>
 <script lang="ts" setup>
@@ -143,7 +155,8 @@ import { useMessage } from "naive-ui"
 import { Icon } from "../../icons"
 import { Showcase, Submission } from "../../api"
 import { buildPreviewDocument, PREVIEW_SANDBOX } from "../../utils/previewDocument"
-import { parseTime, sourceLabel } from "../../utils/helper"
+import { levelLabel, parseTime, sourceLabel } from "../../utils/helper"
+import ChainModal from "../submissions/ChainModal.vue"
 import type {
   AwardManageOut,
   FlagType,
@@ -181,6 +194,7 @@ const sub = ref<SubmissionAll | null>(null)
 const versions = ref<SubmissionOut[]>([])
 const chain = ref<PromptRound[]>([])
 const rating = ref(false)
+const showChain = ref(false)
 
 let awardsCache: Promise<AwardManageOut[]> | null = null
 const awards = ref<AwardManageOut[]>([])
@@ -417,6 +431,14 @@ section {
 h4 {
   margin: 0 0 8px;
   font-size: 13px;
+}
+
+.chain-head {
+  margin-bottom: 8px;
+}
+
+.chain-head h4 {
+  margin: 0;
 }
 
 .delete {
