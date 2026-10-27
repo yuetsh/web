@@ -13,7 +13,7 @@
                 <Icon icon="lucide:arrow-left" />
               </n-button>
             </template>
-            上一个学生（K）
+            上一个学生（J）
           </n-tooltip>
           <n-tooltip>
             <template #trigger>
@@ -21,7 +21,7 @@
                 <Icon icon="lucide:arrow-right" />
               </n-button>
             </template>
-            下一个学生（J）
+            下一个学生（K）
           </n-tooltip>
         </template>
         <n-button
@@ -61,7 +61,8 @@
           </button>
         </div>
         <div class="frame">
-          <iframe :sandbox="PREVIEW_SANDBOX" :srcdoc="doc"></iframe>
+          <!-- key：换作品时换新的 iframe，不进浏览器历史 -->
+          <iframe :key="currentId" :sandbox="PREVIEW_SANDBOX" :srcdoc="doc"></iframe>
         </div>
         <n-flex justify="space-between" align="center" class="meta">
           <span class="muted">

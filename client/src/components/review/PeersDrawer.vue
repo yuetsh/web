@@ -61,7 +61,7 @@
     @update:show="(v: boolean) => !v && (large = null)"
   >
     <div v-if="large" class="large">
-      <iframe :sandbox="PREVIEW_SANDBOX" :srcdoc="docOf(large)"></iframe>
+      <iframe :key="large.id" :sandbox="PREVIEW_SANDBOX" :srcdoc="docOf(large)"></iframe>
     </div>
   </n-modal>
 </template>

@@ -71,11 +71,12 @@
               :key="s.user_id"
               :class="['card', { sel: s.submission?.id === selectedId, missing: !s.submission }]"
               :disabled="!s.submission"
-              @click="s.submission && (selectedId = s.submission.id)"
+              @click="s.submission && openDetail(s.submission.id)"
             >
               <div class="thumb">
                 <iframe
                   v-if="s.submission"
+                  :key="s.submission.id"
                   :sandbox="PREVIEW_SANDBOX"
                   :srcdoc="docOf(s)"
                   loading="lazy"
@@ -112,7 +113,7 @@
         :nav="{ prev: neighbor(-1) !== null, next: neighbor(1) !== null }"
         @prev="move(-1)"
         @next="move(1)"
-        @close="selectedId = null"
+        @close="closeDetail"
         @changed="applyPatch"
       />
     </aside>
@@ -127,6 +128,7 @@
     <iframe
       v-if="presentList[presentIndex]"
       :sandbox="PREVIEW_SANDBOX"
+      :key="presentIndex"
       :srcdoc="docOf(presentList[presentIndex]!)"
     ></iframe>
   </div>
@@ -152,7 +154,31 @@ const loadingWall = ref(false)
 const classname = ref<string | null>((route.query.class as string) || null)
 const taskId = ref<number | null>(route.query.task ? Number(route.query.task) : null)
 const filter = ref<"all" | "unrated" | "missing" | "present">("all")
-const selectedId = ref<string | null>(null)
+// 打开的作品放在地址栏（?sub=），浏览器“后退”就能回到作品墙
+const selectedId = ref<string | null>((route.query.sub as string) || null)
+watch(
+  () => route.query.sub,
+  (v) => {
+    selectedId.value = (v as string) || null
+  },
+)
+// 是不是从作品墙点开的（点开时记了一步历史，关闭时退回那一步）
+let pushedDetail = false
+
+function openDetail(id: string) {
+  pushedDetail = true
+  router.push({ query: { ...route.query, sub: id } })
+}
+
+function closeDetail() {
+  if (pushedDetail) {
+    pushedDetail = false
+    router.back()
+  } else {
+    const { sub: _, ...rest } = route.query
+    router.replace({ query: rest })
+  }
+}
 const presenting = ref(false)
 // 点开作品默认用大图（预览占满中间），老师也可以切回旁边的小面板；记住选择
 const bigPreview = useStorage("review-big-preview", true)
@@ -251,7 +277,7 @@ watch(classname, (c) => {
 })
 watch([classname, taskId], () => {
   router.replace({ query: { class: classname.value ?? undefined, task: taskId.value ?? undefined } })
-  selectedId.value = null
+  pushedDetail = false
   filter.value = "all"
   students.value = []
   loadWall()
@@ -263,9 +289,10 @@ function neighbor(step: number): string | null {
   const i = list.findIndex((s) => s.submission!.id === selectedId.value)
   return list[i + step]?.submission?.id ?? null
 }
+// 切换学生不新增历史，免得要连按很多次后退
 function move(step: number) {
   const id = neighbor(step)
-  if (id) selectedId.value = id
+  if (id) router.replace({ query: { ...route.query, sub: id } })
 }
 
 function applyPatch(p: { id: string; my_score?: number; score?: number; flag?: FlagType }) {
@@ -290,9 +317,10 @@ function onKey(e: KeyboardEvent) {
   }
   const t = e.target as HTMLElement
   if (t.closest("input, textarea, [contenteditable]") || e.ctrlKey || e.metaKey || e.altKey) return
-  if (e.key === "Escape" && selectedId.value) selectedId.value = null
-  else if (e.key === "j" || e.key === "J") move(1)
-  else if (e.key === "k" || e.key === "K") move(-1)
+  if (e.key === "Escape" && selectedId.value) closeDetail()
+  // 按键盘上的位置：J 在左边是上一个，K 在右边是下一个（和面板上的左右箭头一致）
+  else if (e.key === "j" || e.key === "J") move(-1)
+  else if (e.key === "k" || e.key === "K") move(1)
 }
 
 onMounted(async () => {

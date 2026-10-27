@@ -10,6 +10,7 @@
     <div v-else-if="current" class="body">
       <button class="thumb" title="点击放大看" @click="showLarge = true">
         <iframe
+          :key="current.submission_id"
           :sandbox="PREVIEW_SANDBOX"
           :srcdoc="doc"
           tabindex="-1"
@@ -39,7 +40,7 @@
     style="width: 90vw; max-width: 1000px"
   >
     <div class="large">
-      <iframe :sandbox="PREVIEW_SANDBOX" :srcdoc="doc"></iframe>
+      <iframe :key="current?.submission_id" :sandbox="PREVIEW_SANDBOX" :srcdoc="doc"></iframe>
     </div>
     <div class="large-rates">
       <button

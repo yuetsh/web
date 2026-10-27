@@ -24,7 +24,7 @@ async function init() {
 onMounted(init)
 </script>
 <template>
-  <iframe class="iframe" :sandbox="PREVIEW_SANDBOX" :srcdoc="content"></iframe>
+  <iframe v-if="content" class="iframe" :sandbox="PREVIEW_SANDBOX" :srcdoc="content"></iframe>
 </template>
 <style scoped>
 .iframe {

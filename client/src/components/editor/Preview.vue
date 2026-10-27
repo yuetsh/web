@@ -46,6 +46,7 @@
       ref="frame"
       class="iframe"
       :sandbox="PREVIEW_SANDBOX"
+      :key="frameKey"
       :srcdoc="previewContent"
     ></iframe>
   </div>
@@ -141,8 +142,12 @@ function getContent(forDownload = false) {
   })
 }
 
+// 每次内容变了换一个新的 iframe：在同一个 iframe 里改 srcdoc 会进浏览器历史，
+// 按“后退”就成了在预览里倒退，而不是离开页面
+const frameKey = ref(0)
 function preview() {
   previewContent.value = getContent()
+  frameKey.value++
 }
 
 function download() {
