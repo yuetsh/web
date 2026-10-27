@@ -2,12 +2,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import type { Server } from "bun"
 import { app } from "../src/app"
 import { config } from "../src/config"
-import { all } from "../src/db"
+import { all, run } from "../src/db"
 import { upgrade, websocket, type WsData } from "../src/ws"
 import { client, freshDb, makeTask, makeUser } from "./helpers"
 
 // 假的模型接口：每段之间停一下，方便测试中途断开
-const PIECES = ["好的", "```html\n<p>hi</p>\n```"]
+const DEFAULT_PIECES = ["好的", "```html\n<p>hi</p>\n```"]
+let PIECES = DEFAULT_PIECES
 // 最近一次发给模型的请求；分类（非流式）单独记，固定回“3”
 let lastRequest: any = null
 let lastClassify: any = null
@@ -56,7 +57,10 @@ afterAll(() => {
   llm.stop(true)
 })
 
-beforeEach(freshDb)
+beforeEach(() => {
+  freshDb()
+  PIECES = DEFAULT_PIECES
+})
 
 interface Conn {
   ws: WebSocket
@@ -176,9 +180,49 @@ describe("WebSocket 代码生成", () => {
     c.ws.close()
   })
 
+  test("只回答问题、没给代码时 code 是 null", async () => {
+    const { task, token } = await setup()
+    PIECES = ["因为加了 ", "border-radius。"]
+    const c = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    await c.next("init")
+    c.ws.send(JSON.stringify({ type: "message", content: "为什么按钮是圆的？" }))
+    const done = await c.next("complete")
+    expect(done.code).toBeNull()
+    expect(done.message_id).toBeGreaterThan(0)
+    c.ws.close()
+  })
+
   test("token 无效或任务不存在时握手失败", async () => {
     const { task, token } = await setup()
     expect(await connect(`/ws/prompt/${task}/?token=bad`)).toBeNull()
     expect(await connect(`/ws/prompt/9999/?token=${token}`)).toBeNull()
+  })
+})
+
+describe("WebSocket 帮我写清楚", () => {
+  test("教练能看到题目要求、之前的提问和 AI 上一次的说明", async () => {
+    const { task, token } = await setup()
+    run(`UPDATE task_task SET content = $c WHERE id = $id`, { c: "做一个计时器，![图](a.png) 有开始和暂停按钮", id: task })
+    const p = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    await p.next("init")
+    p.ws.send(JSON.stringify({ type: "message", content: "做个计时器" }))
+    await p.next("complete")
+    p.ws.close()
+
+    const g = (await connect(`/ws/guidance/${task}/?token=${token}`))!
+    await g.next("init")
+    g.ws.send(JSON.stringify({ type: "message", content: "改成粉色" }))
+    await g.next("complete")
+    const system = lastRequest.messages[0]
+    expect(system.role).toBe("system")
+    expect(system.content).toContain("题目要求：做一个计时器， 有开始和暂停按钮")
+    expect(system.content).toContain("1. 做个计时器")
+    expect(system.content).toContain("AI 上一次的说明：好的")
+    expect(system.content).not.toContain("<p>hi</p>")
+    expect(lastRequest.messages.at(-1)).toEqual({ role: "user", content: "改成粉色" })
+    // 等后台打完层级再结束，不然假接口关了它会报错
+    const level = () => all(`SELECT prompt_level FROM prompt_message WHERE source = 'guidance' AND role = 'user'`)[0]?.prompt_level
+    for (let i = 0; i < 50 && level() == null; i++) await Bun.sleep(20)
+    g.ws.close()
   })
 })

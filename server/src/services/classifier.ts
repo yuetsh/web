@@ -1,5 +1,6 @@
 import { all, get, run } from "../db"
 import { complete, llmConfigured } from "./llm"
+import { briefOf } from "./prompt"
 
 // 学生在这里是“指挥 AI 做网页”，看的是这句提问里学生自己想了多少，不是要 AI 做的东西有多大：
 // 把题目要求原样贴过去，功能列得再多也只是照着做（L3）
@@ -24,7 +25,6 @@ const CLASSIFY_SYSTEM_PROMPT = `你是一个教育评估专家。学生在网页
 只返回一个数字（1-6），不要解释。`
 
 const MIN_PROMPT_CHARS = 4
-const BRIEF_CHARS = 800
 const PROMPT_CHARS = 1500
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -50,15 +50,6 @@ async function callLlm(content: string): Promise<number | null> {
     console.error("classify LLM call failed:", e)
     return null
   }
-}
-
-// 题目要求去掉图片、压成一段，太长的截掉
-function briefOf(content: string) {
-  const text = content
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-  return text.length > BRIEF_CHARS ? text.slice(0, BRIEF_CHARS) + "……" : text
 }
 
 function clip(text: string) {

@@ -99,6 +99,49 @@ export function codeAsMarkdown(code: {
   return "```html\n" + parts.join("\n\n") + "\n```"
 }
 
+// 题目要求去掉图片、压成一段，太长的截掉
+const BRIEF_CHARS = 800
+
+export function briefOf(content: string) {
+  const text = content
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+  return text.length > BRIEF_CHARS ? text.slice(0, BRIEF_CHARS) + "……" : text
+}
+
+const clipTo = (text: string, n: number) => (text.length > n ? text.slice(0, n) + "……" : text)
+
+// “帮我写清楚”的教练要知道题目和学生已经做到哪了，才分得清照搬题目和自己的想法：
+// 题目要求、学生最近几次对 AI 说的话、AI 上一次的说明（代码去掉）
+export function guidanceContext(conversationId: string, taskId: number) {
+  const task = get<{ title: string; content: string }>(
+    `SELECT title, content FROM task_task WHERE id = $id`,
+    { id: taskId },
+  )
+  const asked = all<{ content: string }>(
+    `SELECT content FROM prompt_message
+     WHERE conversation_id = $id AND role = 'user' AND source IN ('conversation', 'manual')
+     ORDER BY created DESC, id DESC LIMIT 5`,
+    { id: conversationId },
+  ).reverse()
+  const reply = get<{ content: string }>(
+    `SELECT content FROM prompt_message
+     WHERE conversation_id = $id AND role = 'assistant' AND source = 'conversation'
+     ORDER BY created DESC, id DESC LIMIT 1`,
+    { id: conversationId },
+  )
+  const replyText = reply?.content.replace(/```[\s\S]*?(```|$)/g, "").trim()
+  return [
+    `题目：${task?.title ?? "（未知）"}`,
+    `题目要求：${task ? briefOf(task.content) || "（无）" : "（无）"}`,
+    `学生之前对 AI 说过的话：${
+      asked.length ? asked.map((m, i) => `\n${i + 1}. ${clipTo(m.content.trim(), 300)}`).join("") : "（还没有，这是第一次描述作品）"
+    }`,
+    `AI 上一次的说明：${replyText ? clipTo(replyText, 600) : "（无）"}`,
+  ].join("\n\n")
+}
+
 export function getPrecedingUserMessage(asst: Pick<MessageRow, "id" | "conversation_id" | "created">) {
   return get<MessageRow>(
     `SELECT * FROM prompt_message

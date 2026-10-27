@@ -5,6 +5,7 @@ import {
   canAccessTask,
   codeAsMarkdown,
   getOrCreateActiveConversation,
+  guidanceContext,
   insertMessage,
 } from "./services/prompt"
 import {
@@ -151,7 +152,9 @@ async function handlePrompt(ws: WS, data: any) {
     // 有了回复，这条提问才留下来；在后台打 L1–L6 层级
     inBackground(classifyMessage(userMessageId))
     ws.data.pendingUserMessageId = null
-    send(ws, { type: "complete", code, message_id: messageId })
+    // 只回答问题、没给代码的回复不是新版本；发 null，免得工作台把网页清空
+    const hasCode = !!(code.html || code.css || code.js)
+    send(ws, { type: "complete", code: hasCode ? code : null, message_id: messageId })
   } finally {
     dropPendingUserMessage(ws)
   }
@@ -172,7 +175,11 @@ async function handleGuidance(ws: WS, data: any) {
   try {
     let full: string
     try {
-      full = await streamToClient(ws, streamGuidance(ws.data.guidanceHistory, ws.data.abort.signal))
+      const context = guidanceContext(ws.data.conversationId, ws.data.taskId)
+      full = await streamToClient(
+        ws,
+        streamGuidance(ws.data.guidanceHistory, context, ws.data.abort.signal),
+      )
     } catch (e) {
       // 这条提问没有回复，留在上下文里会出现连续两条用户消息
       ws.data.guidanceHistory.pop()

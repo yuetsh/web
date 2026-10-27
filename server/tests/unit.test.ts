@@ -111,7 +111,7 @@ describe("streamChat", () => {
       expect(out).toBe("你好世界")
       expect(model).toBe(config.llmModel)
       expect(thinking).toEqual({ type: "enabled" })
-      for await (const _ of streamGuidance([{ role: "user", content: "hi" }]));
+      for await (const _ of streamGuidance([{ role: "user", content: "hi" }], "题目：x"));
       expect(thinking).toEqual({ type: "disabled" })
     } finally {
       Object.assign(config, saved)
@@ -138,6 +138,19 @@ test("trimHistory 只留最近 20 条，旧回复的代码换成占位", () => {
   expect(out.at(-1)!.content).toContain("<p>29</p>")
   expect(out.at(-3)!.content).toBe("第27版\n```\n（旧版本代码已省略）\n```")
   expect(out.filter((m) => m.content.includes("<p>"))).toHaveLength(1)
+})
+
+test("trimHistory 最后一条回复没有代码时，保留之前最新的那份代码", () => {
+  const out = trimHistory([
+    { role: "user", content: "做个页面" },
+    { role: "assistant", content: "第1版\n```html\n<p>1</p>\n```" },
+    { role: "user", content: "加个按钮" },
+    { role: "assistant", content: "第2版\n```html\n<p>2</p>\n```" },
+    { role: "user", content: "为什么按钮是圆的？" },
+    { role: "assistant", content: "因为加了 border-radius。" },
+  ])
+  expect(out[3]!.content).toContain("<p>2</p>")
+  expect(out[1]!.content).not.toContain("<p>1</p>")
 })
 
 test("userFacingError 不透出接口原始返回", () => {
