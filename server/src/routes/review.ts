@@ -14,6 +14,15 @@ function requireStaff(user: User) {
 // 和成绩册一致：班里的学生包括当助教的 admin
 const CLASS_MEMBERS = `SELECT id FROM account_user
   WHERE classname = $classname AND role IN ('normal', 'admin') AND is_active = 1`
+// 不传班级时：所有有班级的学生
+const ALL_MEMBERS = `SELECT id FROM account_user
+  WHERE classname != '' AND role IN ('normal', 'admin') AND is_active = 1`
+
+function members(classname: string | undefined) {
+  return classname
+    ? { sql: CLASS_MEMBERS, params: { classname } as Record<string, unknown> }
+    : { sql: ALL_MEMBERS, params: {} as Record<string, unknown> }
+}
 
 // 每个人在这个任务上最新的一次提交，以及提交了几次。
 // 先只在 slim 覆盖索引上找，再按 rowid 读这几行的完整内容（代码是宽列，见 CLAUDE.md）
@@ -64,17 +73,16 @@ router.get("/options", (c) => {
 })
 
 // 一个班每个任务交了几个人
+// 不传 classname 就是全部班级
 router.get("/progress", (c) => {
   requireStaff(requireUser(c))
-  const { classname } = query(c, z.object({ classname: z.string().min(1) }))
-  const studentCount = get<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM (${CLASS_MEMBERS})`,
-    { classname },
-  )!.n
+  const { classname } = query(c, z.object({ classname: z.string().min(1).optional() }))
+  const m = members(classname)
+  const studentCount = get<{ n: number }>(`SELECT COUNT(*) AS n FROM (${m.sql})`, m.params)!.n
   const rows = all<{ task_id: number; n: number }>(
     `SELECT s.task_id, COUNT(DISTINCT s.user_id) AS n FROM submission_submission s
-     WHERE s.user_id IN (${CLASS_MEMBERS}) GROUP BY s.task_id`,
-    { classname },
+     WHERE s.user_id IN (${m.sql}) GROUP BY s.task_id`,
+    m.params,
   )
   return c.json({
     student_count: studentCount,
@@ -86,15 +94,18 @@ router.get("/progress", (c) => {
 router.get("/class", (c) => {
   const user = requireUser(c)
   requireStaff(user)
-  const q = query(c, z.object({ classname: z.string().min(1), task_id: z.coerce.number().int() }))
-  orNotFound(get(`SELECT 1 FROM task_task WHERE id = $id`, { id: q.task_id }), "任务不存在")
-  const students = all<{ id: number; username: string }>(
-    `SELECT id, username FROM account_user
-     WHERE classname = $classname AND role IN ('normal', 'admin') AND is_active = 1
-     ORDER BY username, id`,
-    { classname: q.classname },
+  const q = query(
+    c,
+    z.object({ classname: z.string().min(1).optional(), task_id: z.coerce.number().int() }),
   )
-  const latest = latestByUser(q.task_id, CLASS_MEMBERS, { classname: q.classname })
+  orNotFound(get(`SELECT 1 FROM task_task WHERE id = $id`, { id: q.task_id }), "任务不存在")
+  const m = members(q.classname)
+  const students = all<{ id: number; username: string; classname: string }>(
+    `SELECT id, username, classname FROM account_user WHERE id IN (${m.sql})
+     ORDER BY classname, username, id`,
+    m.params,
+  )
+  const latest = latestByUser(q.task_id, m.sql, m.params)
   const rows = loadRows([...latest.values()].map((l) => l.rid), user.id)
   return c.json(
     students.map((s) => {
@@ -102,6 +113,7 @@ router.get("/class", (c) => {
       return {
         user_id: s.id,
         username: s.username,
+        classname: s.classname,
         submission: r
           ? {
               id: uuidOut(r.id),
@@ -122,33 +134,41 @@ router.get("/class", (c) => {
   )
 })
 
-// 学生看本班同学在这道题上的作品：自己交过才开放；自己打分之前不显示作者和得分
+// 学生看同学在这道题上的作品：自己交过才开放；自己打分之前不显示作者和得分。
+// scope=class 只看本班（默认，一个班几十份），scope=all 看全校所有班
 router.get("/peers/:task_id", (c) => {
   const user = requireUser(c)
   const taskId = intParam(c, "task_id")
+  const { scope } = query(c, z.object({ scope: z.enum(["class", "all"]).default("class") }))
   orNotFound(get(`SELECT 1 FROM task_task WHERE id = $id`, { id: taskId }), "任务不存在")
   const submitted = get(
     `SELECT 1 FROM submission_submission WHERE user_id = $me AND task_id = $task_id LIMIT 1`,
     { me: user.id, task_id: taskId },
   )
-  if (!submitted || !user.classname) return c.json({ locked: true, items: [] })
+  if (!submitted) return c.json({ locked: true, items: [] })
+  const byClass = scope === "class" && !!user.classname
   const members = `SELECT id FROM account_user
-    WHERE classname = $classname AND role = 'normal' AND is_active = 1 AND id != $me`
-  const params = { classname: user.classname, me: user.id }
+    WHERE role = 'normal' AND is_active = 1 AND id != $me
+      ${byClass ? "AND classname = $classname" : ""}`
+  const params = byClass ? { classname: user.classname, me: user.id } : { me: user.id }
   const latest = latestByUser(taskId, members, params)
   const rows = loadRows([...latest.values()].map((l) => l.rid), user.id)
-  const names = new Map(
-    all<{ id: number; username: string }>(`SELECT id, username FROM account_user WHERE id IN (${members})`, params).map(
-      (u) => [u.id, u.username],
-    ),
+  const people = new Map(
+    all<{ id: number; username: string; classname: string }>(
+      `SELECT id, username, classname FROM account_user WHERE id IN (${members})`,
+      params,
+    ).map((u) => [u.id, u]),
   )
   const items = [...rows.values()]
     .sort((a, b) => (a.created < b.created ? 1 : -1))
     .map((r) => {
       const rated = (r.my_score || 0) > 0
+      const p = people.get(r.user_id)
       return {
         id: uuidOut(r.id),
-        username: rated ? names.get(r.user_id) : null,
+        username: rated ? p?.username : null,
+        // 班级不算身份信息，打分前也显示
+        classname: p?.classname ?? "",
         score: rated ? r.score : null,
         my_score: r.my_score || 0,
         created: iso(r.created),

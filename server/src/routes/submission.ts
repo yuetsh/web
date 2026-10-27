@@ -37,16 +37,13 @@ const router = new Hono<Env>()
 router.route("/showcase", showcase)
 router.route("/review", review)
 
-// 学生能看的提交：自己的、进了作品展的、本班同学在自己也交过的题上的。老师都能看
+// 学生能看的提交：自己的、进了作品展的、自己也交过的那道题上同学（任何班）的。老师都能看
 function canView(user: User, sub: { id: string; user_id: number; task_id: number }) {
   if (isStaff(user) || sub.user_id === user.id) return true
   if (get(`SELECT 1 FROM submission_submissionaward WHERE submission_id = $id`, { id: sub.id })) return true
-  if (!user.classname) return false
   return !!get(
-    `SELECT 1 FROM account_user u
-     WHERE u.id = $owner AND u.classname = $classname
-       AND EXISTS (SELECT 1 FROM submission_submission s WHERE s.user_id = $me AND s.task_id = $task_id)`,
-    { owner: sub.user_id, classname: user.classname, me: user.id, task_id: sub.task_id },
+    `SELECT 1 FROM submission_submission s WHERE s.user_id = $me AND s.task_id = $task_id LIMIT 1`,
+    { me: user.id, task_id: sub.task_id },
   )
 }
 

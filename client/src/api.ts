@@ -465,18 +465,20 @@ export const Review = {
   async options(): Promise<ReviewOptions> {
     return (await http.get("/submission/review/options")).data
   },
-  async progress(classname: string): Promise<ReviewProgress> {
+  // classname 不传就是全部班级
+  async progress(classname?: string): Promise<ReviewProgress> {
     return (await http.get("/submission/review/progress", { params: { classname } })).data
   },
-  async classWall(classname: string, taskId: number): Promise<ReviewStudent[]> {
+  async classWall(classname: string | undefined, taskId: number): Promise<ReviewStudent[]> {
     return (
       await http.get("/submission/review/class", {
         params: { classname, task_id: taskId },
       })
     ).data
   },
-  async peers(taskId: number): Promise<PeerWorks> {
-    return (await http.get(`/submission/review/peers/${taskId}`)).data
+  // scope：class 只看本班，all 看所有班
+  async peers(taskId: number, scope: "class" | "all" = "class"): Promise<PeerWorks> {
+    return (await http.get(`/submission/review/peers/${taskId}`, { params: { scope } })).data
   },
 }
 

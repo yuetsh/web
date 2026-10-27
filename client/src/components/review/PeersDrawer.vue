@@ -10,9 +10,15 @@
           style="margin-top: 40px"
         />
         <template v-else-if="data">
-          <p class="hint">
-            本班同学在这道题上最新的作品。打分之前不显示是谁做的，打完分才显示。
-          </p>
+          <n-flex justify="space-between" align="center" class="bar">
+            <span class="hint">
+              同学们在这道题上最新的作品。打分之前不显示是谁做的，打完分才显示。
+            </span>
+            <n-radio-group v-model:value="scope" size="small">
+              <n-radio-button value="class">本班</n-radio-button>
+              <n-radio-button value="all">全部班级</n-radio-button>
+            </n-radio-group>
+          </n-flex>
           <n-empty v-if="!data.items.length" description="还没有同学交这道题" />
           <div class="grid">
             <div v-for="w in data.items" :key="w.id" class="work">
@@ -25,7 +31,10 @@
                 ></iframe>
               </button>
               <div class="info">
-                <span :class="{ anon: !w.username }">{{ w.username ?? "匿名同学" }}</span>
+                <span :class="{ anon: !w.username }">
+                  <span v-if="scope === 'all' && w.classname" class="cls">{{ w.classname }} 班</span>
+                  {{ w.username ?? "匿名同学" }}
+                </span>
                 <span v-if="w.my_score" class="mine">我给了 {{ w.my_score }} 分</span>
               </div>
               <div v-if="!w.my_score" class="rates">
@@ -79,19 +88,26 @@ const data = ref<PeerWorks | null>(null)
 const loading = ref(false)
 const rating = ref<string | null>(null)
 const large = ref<PeerWork | null>(null)
+const scope = ref<"class" | "all">("class")
 
 const docOf = (w: PeerWork) =>
   buildPreviewDocument({ html: w.html, css: w.css, js: w.js, assetBaseUrl: props.assetBaseUrl })
 
-watch(show, async (open) => {
-  if (!open || !props.taskId) return
+let seq = 0
+async function load() {
+  if (!props.taskId) return
+  const s = ++seq
   loading.value = true
   try {
-    data.value = await Review.peers(props.taskId)
+    const res = await Review.peers(props.taskId, scope.value)
+    if (s === seq) data.value = res
   } finally {
-    loading.value = false
+    if (s === seq) loading.value = false
   }
-})
+}
+
+watch(show, (open) => open && load())
+watch(scope, load)
 
 async function rate(w: PeerWork, score: number) {
   rating.value = w.id
@@ -107,10 +123,20 @@ async function rate(w: PeerWork, score: number) {
 }
 </script>
 <style scoped>
+.bar {
+  margin-bottom: 12px;
+  flex-wrap: nowrap !important;
+}
+
 .hint {
-  margin: 0 0 12px;
   font-size: 13px;
   color: var(--wp-muted);
+}
+
+.cls {
+  margin-right: 4px;
+  color: var(--wp-muted);
+  font-size: 12px;
 }
 
 .grid {

@@ -1,5 +1,5 @@
 <template>
-  <div class="panel">
+  <div :class="['panel', { wide }]">
     <div class="head">
       <div class="who">
         <b>{{ sub?.username ?? "…" }}</b>
@@ -24,14 +24,31 @@
             下一个学生（J）
           </n-tooltip>
         </template>
-        <n-button size="small" quaternary @click="emit('close')">
-          <Icon icon="lucide:x" />
+        <n-button
+          v-if="canWiden"
+          size="small"
+          quaternary
+          @click="emit('toggle-wide')"
+        >
+          <template #icon>
+            <Icon :icon="wide ? 'lucide:minimize-2' : 'lucide:maximize-2'" />
+          </template>
+          {{ wide ? "小面板" : "大图" }}
         </n-button>
+        <n-tooltip>
+          <template #trigger>
+            <n-button size="small" quaternary @click="emit('close')">
+              <Icon icon="lucide:x" />
+            </n-button>
+          </template>
+          {{ wide ? "返回作品墙（Esc）" : "关闭" }}
+        </n-tooltip>
       </n-flex>
     </div>
 
     <n-spin :show="loading" class="body">
-      <template v-if="sub">
+      <div v-if="sub" class="layout">
+       <div class="stage">
         <div class="versions" v-if="versions.length > 1">
           <span class="muted">共交了 {{ versions.length }} 次：</span>
           <button
@@ -53,6 +70,8 @@
           </span>
           <n-button text size="small" @click="openFull">全屏打开</n-button>
         </n-flex>
+       </div>
+       <div class="side">
 
         <section>
           <h4>打分</h4>
@@ -106,7 +125,8 @@
             </li>
           </ol>
         </section>
-      </template>
+       </div>
+      </div>
     </n-spin>
   </div>
 </template>
@@ -128,6 +148,10 @@ import type {
 // 老师看一份提交：预览、交过的各个版本、打分、课上展示、加入作品展、提示词链
 const props = defineProps<{
   submissionId: string
+  // 大图：预览占满左边，打分和提示词放右边一栏
+  wide?: boolean
+  // 是否显示“大图 / 小面板”切换
+  canWiden?: boolean
   // 作品墙里用：能不能切到上一个 / 下一个学生
   nav?: { prev: boolean; next: boolean }
 }>()
@@ -135,6 +159,7 @@ const emit = defineEmits<{
   prev: []
   next: []
   close: []
+  "toggle-wide": []
   // 让作品墙同步更新这张卡片
   changed: [patch: { id: string; my_score?: number; score?: number; flag?: FlagType }]
 }>()
@@ -282,6 +307,41 @@ onUnmounted(() => window.removeEventListener("keydown", onKey))
   padding: 12px 14px 20px;
 }
 
+/* 大图：左边预览占满高度，右边一栏单独滚动 */
+.wide .body {
+  overflow: hidden;
+  padding: 0;
+}
+
+.wide .body :deep(.n-spin-content) {
+  height: 100%;
+}
+
+.wide .layout {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.wide .stage {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 14px;
+}
+
+.wide .stage .frame {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.wide .side {
+  border-left: 1px solid var(--wp-line);
+  overflow-y: auto;
+  padding: 0 14px 20px;
+}
+
 .muted {
   color: var(--wp-muted);
   font-size: 12px;
@@ -361,6 +421,11 @@ h4 {
 
 .hint {
   margin-left: 6px;
+  white-space: nowrap;
+}
+
+.wide .rates {
+  flex-wrap: wrap;
 }
 
 .chain {

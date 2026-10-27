@@ -410,6 +410,7 @@ export interface ReviewSubmission {
 export interface ReviewStudent {
   user_id: number
   username: string
+  classname: string
   submission: ReviewSubmission | null
 }
 
@@ -417,6 +418,7 @@ export interface PeerWork {
   id: string
   // 自己打分之前是 null
   username: string | null
+  classname: string
   score: number | null
   my_score: number
   created: string

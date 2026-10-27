@@ -495,7 +495,7 @@ describe("任务素材", () => {
 })
 
 describe("同学作品与批改", () => {
-  test("学生只能看自己的、作品展里的、本班同学在自己也交过的题上的提交", async () => {
+  test("学生只能看自己的、作品展里的、自己也交过的题上同学（任何班）的提交", async () => {
     const me = makeUser("me", "normal", "c1")
     const mate = makeUser("mate", "normal", "c1")
     const other = makeUser("other", "normal", "c2")
@@ -509,10 +509,15 @@ describe("同学作品与批改", () => {
     const locked = await stu("GET", `/api/submission/review/peers/${task}`)
     expect(locked.json).toEqual({ locked: true, items: [] })
 
+    expect((await stu("GET", `/api/submission/${uuid(otherSub)}`)).status).toBe(403)
     makeSubmission(me, task)
     expect((await stu("GET", `/api/submission/${uuid(mateSub)}`)).status).toBe(200)
-    // 外班的仍然看不到
-    expect((await stu("GET", `/api/submission/${uuid(otherSub)}`)).status).toBe(403)
+    // 交过以后外班的也能看
+    expect((await stu("GET", `/api/submission/${uuid(otherSub)}`)).status).toBe(200)
+    // 没交过的题仍然看不到
+    const otherTask = makeTask("T2", "challenge", 2)
+    const otherTaskSub = makeSubmission(mate, otherTask)
+    expect((await stu("GET", `/api/submission/${uuid(otherTaskSub)}`)).status).toBe(403)
     // 列表里只有自己的
     const list = await stu("GET", "/api/submission/")
     expect(list.json.items.map((s: any) => s.username)).toEqual(["me"])
@@ -539,6 +544,14 @@ describe("同学作品与批改", () => {
 
     const random = await (await client("other"))("GET", "/api/submission/random-for-rating")
     expect(random.json.username).toBeUndefined()
+
+    // 默认只看本班；scope=all 能看到外班，标着班级，同样匿名
+    const otherSub = makeSubmission(get(`SELECT id FROM account_user WHERE username = 'other'`).id, task)
+    const all = await stu("GET", `/api/submission/review/peers/${task}?scope=all`)
+    expect(all.json.items.map((w: any) => [w.classname, w.username])).toContainEqual(["c2", null])
+    expect(all.json.items.map((w: any) => w.id)).toContain(uuid(otherSub))
+    const mine = await stu("GET", `/api/submission/review/peers/${task}`)
+    expect(mine.json.items.map((w: any) => w.classname)).toEqual(["c1"])
   })
 
   test("老师按班级 × 任务看作品墙；课上展示用 flag", async () => {
@@ -558,8 +571,20 @@ describe("同学作品与批改", () => {
     ])
     const progress = await teacher("GET", "/api/submission/review/progress?classname=c1")
     expect(progress.json).toEqual({ student_count: 2, submitted: { [task]: 1 } })
+
+    // 不传班级：所有班的学生都在，带着班级
+    const other = makeUser("z", "normal", "c2")
+    makeSubmission(other, task)
+    const allWall = await teacher("GET", `/api/submission/review/class?task_id=${task}`)
+    expect(allWall.json.map((s: any) => [s.classname, s.username])).toEqual([
+      ["c1", "a"],
+      ["c1", "b"],
+      ["c2", "z"],
+    ])
+    const allProgress = await teacher("GET", "/api/submission/review/progress")
+    expect(allProgress.json).toEqual({ student_count: 3, submitted: { [task]: 2 } })
     const options = await teacher("GET", "/api/submission/review/options")
-    expect(options.json.classes).toEqual(["c1"])
+    expect(options.json.classes).toEqual(["c1", "c2"])
 
     expect((await teacher("PUT", `/api/submission/${uuid(latest)}/flag`, { flag: "present" })).json.flag).toBe("present")
   })

@@ -85,11 +85,11 @@
   </n-flex>
   <n-drawer
     :show="!!reviewId"
-    :width="400"
+    width="min(1180px, 92vw)"
     placement="right"
     @update:show="(v: boolean) => !v && (reviewId = null)"
   >
-    <ReviewPanel v-if="reviewId" :submission-id="reviewId" @close="reviewId = null" />
+    <ReviewPanel v-if="reviewId" :submission-id="reviewId" wide @close="reviewId = null" />
   </n-drawer>
 </template>
 

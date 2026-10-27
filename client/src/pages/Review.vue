@@ -1,6 +1,6 @@
 <template>
   <div class="review">
-    <aside class="tasks">
+    <aside v-show="!fullDetail" class="tasks">
       <n-select
         v-model:value="classname"
         :options="classOptions"
@@ -25,7 +25,7 @@
       <n-empty v-else description="先选一个班级" size="small" style="margin-top: 40px" />
     </aside>
 
-    <main class="wall">
+    <main v-show="!fullDetail" class="wall">
       <template v-if="task && classname">
         <div class="wall-head">
           <div class="wall-title">
@@ -59,9 +59,15 @@
           </n-flex>
         </div>
         <n-spin :show="loadingWall" class="grid-wrap">
-          <div class="grid">
+          <template v-for="g in groups" :key="g.name">
+          <div v-if="g.name" class="group-head">
+            <b>{{ g.name }} 班</b>
+            <span>已交 {{ g.submitted }} / {{ g.total }}</span>
+            <span v-if="g.collapsed">· 这个班还没有人交，已收起</span>
+          </div>
+          <div v-if="!g.collapsed" class="grid">
             <button
-              v-for="s in visible"
+              v-for="s in g.items"
               :key="s.user_id"
               :class="['card', { sel: s.submission?.id === selectedId, missing: !s.submission }]"
               :disabled="!s.submission"
@@ -86,6 +92,7 @@
               <span v-if="s.submission?.flag === 'present'" class="present">讲评</span>
             </button>
           </div>
+          </template>
           <n-empty
             v-if="!loadingWall && !visible.length"
             description="没有符合条件的学生"
@@ -96,9 +103,12 @@
       <n-empty v-else description="选一个班级和任务开始批改" style="margin-top: 120px" />
     </main>
 
-    <aside v-if="selectedId" class="detail">
+    <aside v-if="selectedId" :class="['detail', { full: fullDetail }]">
       <ReviewPanel
         :submission-id="selectedId"
+        :wide="fullDetail"
+        can-widen
+        @toggle-wide="bigPreview = !bigPreview"
         :nav="{ prev: neighbor(-1) !== null, next: neighbor(1) !== null }"
         @prev="move(-1)"
         @next="move(1)"
@@ -124,6 +134,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
+import { useStorage } from "@vueuse/core"
 import { Icon } from "../icons"
 import ReviewPanel from "../components/review/ReviewPanel.vue"
 import { Review } from "../api"
@@ -143,9 +154,18 @@ const taskId = ref<number | null>(route.query.task ? Number(route.query.task) : 
 const filter = ref<"all" | "unrated" | "missing" | "present">("all")
 const selectedId = ref<string | null>(null)
 const presenting = ref(false)
+// 点开作品默认用大图（预览占满中间），老师也可以切回旁边的小面板；记住选择
+const bigPreview = useStorage("review-big-preview", true)
+const fullDetail = computed(() => !!selectedId.value && bigPreview.value)
 const presentIndex = ref(0)
 
-const classOptions = computed(() => options.value.classes.map((c) => ({ label: `${c} 班`, value: c })))
+// 全部班级：一道题全校的作品放在一面墙上，按班级分组
+const ALL = "__all__"
+const classOptions = computed(() => [
+  { label: "全部班级", value: ALL },
+  ...options.value.classes.map((c) => ({ label: `${c} 班`, value: c })),
+])
+const classParam = () => (classname.value === ALL ? undefined : classname.value ?? undefined)
 const task = computed(() => options.value.tasks.find((t) => t.id === taskId.value))
 const taskGroups = computed(() => [
   { label: "教程", items: options.value.tasks.filter((t) => t.task_type === "tutorial") },
@@ -171,6 +191,22 @@ const visible = computed(() =>
     return true
   }),
 )
+const groups = computed(() => {
+  if (classname.value !== ALL) {
+    return [{ name: "", items: visible.value, submitted: 0, total: 0, collapsed: false }]
+  }
+  const map = new Map<string, ReviewStudent[]>()
+  for (const s of visible.value) {
+    if (!map.has(s.classname)) map.set(s.classname, [])
+    map.get(s.classname)!.push(s)
+  }
+  return [...map].map(([name, items]) => {
+    const all = students.value.filter((s) => s.classname === name)
+    const submitted = all.filter((s) => s.submission).length
+    // 全校一起看时，没人交的班（这道题没布置给它）只留一行标题，不然一屏都是“未交”
+    return { name, items, submitted, total: all.length, collapsed: !submitted && filter.value !== "missing" }
+  })
+})
 const presentList = computed(() => students.value.filter((s) => s.submission?.flag === "present"))
 
 const docs = new Map<string, string>()
@@ -197,7 +233,7 @@ async function loadWall() {
   const s = ++wallSeq
   loadingWall.value = true
   try {
-    const data = await Review.classWall(classname.value, taskId.value)
+    const data = await Review.classWall(classParam(), taskId.value)
     if (s === wallSeq) students.value = data
   } finally {
     if (s === wallSeq) loadingWall.value = false
@@ -206,7 +242,7 @@ async function loadWall() {
 
 async function loadProgress() {
   progress.value = null
-  if (classname.value) progress.value = await Review.progress(classname.value)
+  if (classname.value) progress.value = await Review.progress(classParam())
 }
 
 watch(classname, (c) => {
@@ -254,7 +290,8 @@ function onKey(e: KeyboardEvent) {
   }
   const t = e.target as HTMLElement
   if (t.closest("input, textarea, [contenteditable]") || e.ctrlKey || e.metaKey || e.altKey) return
-  if (e.key === "j" || e.key === "J") move(1)
+  if (e.key === "Escape" && selectedId.value) selectedId.value = null
+  else if (e.key === "j" || e.key === "J") move(1)
   else if (e.key === "k" || e.key === "K") move(-1)
 }
 
@@ -263,7 +300,8 @@ onMounted(async () => {
   options.value = await Review.options()
   if (!classname.value) {
     const saved = localStorage.getItem("review-class")
-    classname.value = saved && options.value.classes.includes(saved) ? saved : null
+    classname.value =
+      saved && (saved === ALL || options.value.classes.includes(saved)) ? saved : null
   } else {
     loadProgress()
     loadWall()
@@ -401,6 +439,18 @@ onUnmounted(() => window.removeEventListener("keydown", onKey))
   overflow-y: auto;
 }
 
+.group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 14px 0;
+}
+
+.group-head span {
+  font-size: 12px;
+  color: var(--wp-muted);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
@@ -520,6 +570,12 @@ onUnmounted(() => window.removeEventListener("keydown", onKey))
   flex: none;
   border-left: 1px solid var(--wp-line);
   min-height: 0;
+}
+
+.detail.full {
+  flex: 1;
+  width: auto;
+  border-left: 0;
 }
 
 .present-mode {
