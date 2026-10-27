@@ -48,6 +48,10 @@
             >
               开始讲评（{{ presentList.length }}）
             </n-button>
+            <n-button size="small" @click="showStats = true">
+              <template #icon><Icon icon="lucide:bar-chart-2" /></template>
+              课堂总结
+            </n-button>
             <n-tooltip>
               <template #trigger>
                 <n-button size="small" quaternary @click="loadWall">
@@ -119,6 +123,16 @@
     </aside>
   </div>
 
+  <TaskStatsModal
+    v-if="task"
+    v-model:show="showStats"
+    :task-id="task.id"
+    :title="`${task.display}. ${task.title}`"
+    :initial-class="classname"
+    in-review
+    @open="openFromStats"
+  />
+
   <div v-if="presenting" class="present-mode">
     <div class="present-head">
       <b>{{ presentList[presentIndex]?.username }}</b>
@@ -134,11 +148,12 @@
   </div>
 </template>
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from "vue"
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useStorage } from "@vueuse/core"
 import { Icon } from "../icons"
 import ReviewPanel from "../components/review/ReviewPanel.vue"
+import TaskStatsModal from "../components/task/TaskStatsModal.vue"
 import { Review } from "../api"
 import { buildPreviewDocument, PREVIEW_SANDBOX } from "../utils/previewDocument"
 import type { FlagType, ReviewOptions, ReviewProgress, ReviewStudent } from "../utils/type"
@@ -168,6 +183,20 @@ let pushedDetail = false
 function openDetail(id: string) {
   pushedDetail = true
   router.push({ query: { ...route.query, sub: id } })
+}
+
+// 课堂总结里点了高分作品：在这里打开；那个学生不在当前班就先切过去
+const showStats = ref(false)
+async function openFromStats(id: string, cls: string) {
+  showStats.value = false
+  if (classname.value !== ALL && classname.value !== cls) {
+    classname.value = cls
+    // 先让地址栏变成新班级（切班的 watch 也会这么改），关掉作品时“后退”才回到这个班
+    await nextTick()
+    await router.replace({ query: { class: cls, task: taskId.value ?? undefined } })
+  }
+  pushedDetail = true
+  router.push({ query: { class: classname.value ?? undefined, task: taskId.value ?? undefined, sub: id } })
 }
 
 function closeDetail() {

@@ -134,7 +134,7 @@
       </div>
     </n-spin>
 
-    <template #footer>
+    <template v-if="!inReview" #footer>
       <n-flex justify="end">
         <n-button type="primary" icon-placement="right" @click="openReview">
           去批改{{ isAll ? "" : " " + classname + " 班" }}
@@ -153,8 +153,19 @@ import { Submission } from "../../api"
 import type { TaskStatsOut, TopScoredItem, UserTag } from "../../utils/type"
 
 // 老师下课前看的这道题的总结：默认看批改页正在看的班
-const props = defineProps<{ taskId: number; show: boolean; title?: string }>()
-defineEmits<{ (e: "update:show", v: boolean): void }>()
+const props = defineProps<{
+  taskId: number
+  show: boolean
+  title?: string
+  // 在批改页里打开：不显示“去批改”，点高分作品直接在批改页里打开
+  inReview?: boolean
+  // 批改页正在看的班级（“__all__” 是全部班级）；不传就用记住的
+  initialClass?: string | null
+}>()
+const emit = defineEmits<{
+  "update:show": [v: boolean]
+  open: [submissionId: string, classname: string]
+}>()
 
 // 和批改页共用“当前班级”
 const ALL = "__all__"
@@ -237,11 +248,11 @@ watch(
   () => props.show,
   async (open) => {
     if (!open || !props.taskId) return
+    let saved: string | null = props.initialClass ?? null
     try {
-      classname.value = localStorage.getItem(CLASS_KEY) || ALL
-    } catch {
-      classname.value = ALL
-    }
+      saved ||= localStorage.getItem(CLASS_KEY)
+    } catch {}
+    classname.value = saved || ALL
     await load()
     // 记住的班级已经没有学生了
     if (!isAll.value && !stats.value?.classes.includes(classname.value)) {
@@ -257,6 +268,10 @@ function openInNewTab(query: Record<string, string>) {
 }
 
 function openSubmission(item: TopScoredItem) {
+  if (props.inReview) {
+    emit("open", item.submission_id, item.classname)
+    return
+  }
   openInNewTab({
     class: isAll.value ? item.classname : classname.value,
     task: String(props.taskId),
