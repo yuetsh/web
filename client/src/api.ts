@@ -264,6 +264,7 @@ export const Submission = {
       prompt?: string
     },
     messageId?: number,
+    reflection?: string,
   ) {
     const { prompt, ...rest } = code
     const data = {
@@ -271,6 +272,7 @@ export const Submission = {
       ...rest,
       prompt: prompt || null,
       message_id: messageId ?? null,
+      reflection: reflection || null,
     }
     const res = await http.post("/submission/", data)
     return res.data

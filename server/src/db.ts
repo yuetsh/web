@@ -51,6 +51,9 @@ CREATE INDEX IF NOT EXISTS "prompt_message_prompt_level_e461b596" ON "prompt_mes
 CREATE INDEX IF NOT EXISTS "prompt_message_chain" ON "prompt_message" ("conversation_id", "created", "id", "role", "source", "prompt_level");
 CREATE INDEX IF NOT EXISTS "prompt_message_submission" ON "prompt_message" ("submission_id", "conversation_id", "created", "source") WHERE "submission_id" IS NOT NULL;
 
+-- 学生交作品时写的一句反思（最满意的改动和理由）；可以不写。删提交时跟着删
+CREATE TABLE IF NOT EXISTS "submission_reflection" ("submission_id" char(32) NOT NULL PRIMARY KEY REFERENCES "submission_submission" ("id") ON DELETE CASCADE, "content" text NOT NULL, "modified" datetime NOT NULL);
+
 -- 登录用 JWT：access token 不落库，refresh token 只存 sha256
 DROP TABLE IF EXISTS "auth_session";
 CREATE TABLE IF NOT EXISTS "auth_refresh_token" ("token_hash" text NOT NULL PRIMARY KEY, "user_id" bigint NOT NULL REFERENCES "account_user" ("id") ON DELETE CASCADE, "expire_at" datetime NOT NULL);

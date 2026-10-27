@@ -276,6 +276,34 @@ describe("提交与删除", () => {
     expect(all(`SELECT COUNT(*) AS n FROM submission_submission WHERE id != $id`, { id: otherSub })).toEqual([{ n: 1 }])
   })
 
+  test("交的时候写的反思：再交没写就保留，只有老师和作者能看，删提交时一起删", async () => {
+    makeUser("stu")
+    makeUser("mate")
+    makeUser("teacher", "admin")
+    const task = makeTask("T")
+    const stu = await client("stu")
+    const edit = await stu("POST", "/api/prompt/versions", { task_id: task, html: "<p>1", css: "", js: "" })
+    const sub = await stu("POST", "/api/submission/", {
+      task_id: task,
+      html: "<p>1",
+      message_id: edit.json.message_id,
+      reflection: "  按钮改成三个，因为五个太乱  ",
+    })
+    const id = sub.json.id
+    await stu("POST", "/api/submission/", { task_id: task, html: "<p>1!", message_id: edit.json.message_id, reflection: "" })
+    expect((await stu("GET", `/api/submission/${id}`)).json.reflection).toBe("按钮改成三个，因为五个太乱")
+    expect((await (await client("teacher"))("GET", `/api/submission/${id}`)).json.reflection).toBe("按钮改成三个，因为五个太乱")
+
+    const mate = await client("mate")
+    await mate("POST", "/api/submission/", { task_id: task, html: "<p>m" })
+    const peer = await mate("GET", `/api/submission/${id}`)
+    expect(peer.status).toBe(200)
+    expect(peer.json.reflection).toBeNull()
+
+    expect((await stu("DELETE", `/api/submission/${id}`)).status).toBe(200)
+    expect(all(`SELECT * FROM submission_reflection`)).toEqual([])
+  })
+
   test("被评分的提交只有超管能删", async () => {
     const author = makeUser("author")
     const other = makeUser("other")

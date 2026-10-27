@@ -120,6 +120,7 @@ router.post("/", async (c) => {
       js: z.string().nullable().optional(),
       prompt: z.string().nullable().optional(),
       message_id: z.number().int().nullable().optional(), // 关联的 assistant message
+      reflection: z.string().max(1000).nullable().optional(), // 交的时候写的一句反思，可以不写
     }),
   )
   const task = orNotFound(
@@ -130,6 +131,8 @@ router.post("/", async (c) => {
   if (task.task_type === "creation") throw new HttpError(400, "自由创作不需要提交")
 
   const code = { html: p.html ?? null, css: p.css ?? null, js: p.js ?? null }
+
+  const reflection = p.reflection?.trim() || null
 
   const { submissionId, newUserMsgId } = tx(() => {
     let manualAsstMsgId: number | null = null
@@ -202,6 +205,15 @@ router.post("/", async (c) => {
     )
     return { submissionId: id, newUserMsgId }
   })
+
+  // 同一版再交时没写就留着上次写的
+  if (reflection) {
+    run(
+      `INSERT INTO submission_reflection (submission_id, content, modified) VALUES ($id, $content, $ts)
+       ON CONFLICT (submission_id) DO UPDATE SET content = excluded.content, modified = excluded.modified`,
+      { id: submissionId, content: reflection, ts: now() },
+    )
+  }
 
   // 只对新增的提示词做层级分类
   if (
@@ -540,7 +552,13 @@ router.get("/:id", (c) => {
   const id = uuidParam(c, "id")
   requireView(user, id)
   const s = orNotFound(get(`${SUBMISSION_SELECT} ${SUBMISSION_FROM} WHERE s.id = $id`, { me: user.id, id }))
-  const out = submissionOut(s)
+  // 反思只给老师和作者本人看
+  const reflection =
+    isStaff(user) || s.user_id === user.id
+      ? (get<{ content: string }>(`SELECT content FROM submission_reflection WHERE submission_id = $id`, { id })
+          ?.content ?? null)
+      : null
+  const out = { ...submissionOut(s), reflection }
   // 和同学作品一样：学生给同学打分之前不告诉作者和得分（作品展里的本来就署名）
   if (!isStaff(user) && s.user_id !== user.id && !out.my_score && !inShowcase(id)) {
     return c.json({ ...out, userid: null, username: null, score: null })

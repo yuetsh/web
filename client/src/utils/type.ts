@@ -167,6 +167,8 @@ export interface SubmissionAll {
   view_count: number
   created: Date
   modified: Date
+  // 交的时候写的反思，只有老师和作者本人拿得到
+  reflection?: string | null
 }
 
 export interface UserTag {

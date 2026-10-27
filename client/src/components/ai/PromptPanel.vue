@@ -77,63 +77,105 @@
     </div>
     <GuidancePanel @generate="onGuidanceGenerate" />
     <div class="input-area">
-      <n-flex
-        class="prompt-input-row"
-        align="flex-start"
-        :wrap="false"
-        :size="8"
-      >
-        <n-input
-          v-model:value="input"
-          type="textarea"
-          :autosize="{ minRows: 1, maxRows: 4 }"
-          placeholder="用你自己的话说说想做成什么样…"
-          :disabled="streaming"
-          style="flex: 1; min-width: 0"
-          @keydown.enter.exact.prevent="send"
-        />
-        <n-tooltip>
-          <template #trigger>
-            <n-button
-              secondary
-              :disabled="!input.trim() || !connected || !currentTaskId || streaming"
-              style="flex-shrink: 0"
-              @click="startGuidance"
-            >
-              <template #icon>
-                <Icon icon="lucide:lightbulb" :width="16" />
-              </template>
-              帮我写清楚
-            </n-button>
-          </template>
-          AI 教练会问你几个问题，帮你把想要的效果描述清楚
-        </n-tooltip>
-      </n-flex>
-      <n-flex justify="flex-end" align="center" style="margin-top: 8px">
-        <n-select
-          v-model:value="selectedModel"
-          :options="modelOptions"
-          style="width: 150px"
-          :disabled="streaming"
-        />
-        <n-button v-if="streaming" type="error" @click="stopPrompt">
-          停止
-        </n-button>
-        <n-button
-          v-else
-          type="primary"
-          :disabled="!input.trim() || !connected"
-          @click="send"
+      <!-- 只说“不行”“没反应”时提醒一下，可以直接发 -->
+      <div v-if="vagueHint" class="vague-hint">
+        <span>说清楚哪里不对，AI 更容易一次修好</span>
+        <n-flex :size="4" :wrap="false">
+          <n-button size="tiny" type="primary" secondary @click="openProblem">说清楚</n-button>
+          <n-button size="tiny" quaternary @click="sendAnyway">直接发</n-button>
+        </n-flex>
+      </div>
+      <div v-if="problemOpen" class="problem">
+        <div class="problem-title">出问题了？说清楚这三件事</div>
+        <label>我做了什么</label>
+        <n-input v-model:value="problem.did" placeholder="比如：点了「开始」按钮" />
+        <label>想看到什么</label>
+        <n-input v-model:value="problem.want" placeholder="比如：倒计时开始走" />
+        <label>实际看到了什么</label>
+        <n-input v-model:value="problem.saw" placeholder="比如：数字一直停在 60 不动" />
+        <n-flex justify="end" :size="8" style="margin-top: 10px">
+          <n-button @click="problemOpen = false">取消</n-button>
+          <n-button
+            type="primary"
+            :disabled="!problem.did.trim() || !problem.saw.trim() || !connected || streaming"
+            @click="sendProblem"
+          >
+            发给 AI
+          </n-button>
+        </n-flex>
+      </div>
+      <template v-else>
+        <n-flex
+          class="prompt-input-row"
+          align="flex-start"
+          :wrap="false"
+          :size="8"
         >
-          发送
-        </n-button>
-      </n-flex>
+          <n-input
+            v-model:value="input"
+            type="textarea"
+            :autosize="{ minRows: 1, maxRows: 4 }"
+            placeholder="用你自己的话说说想做成什么样…"
+            :disabled="streaming"
+            style="flex: 1; min-width: 0"
+            @keydown.enter.exact.prevent="send"
+          />
+          <n-tooltip>
+            <template #trigger>
+              <n-button
+                secondary
+                :disabled="!input.trim() || !connected || !currentTaskId || streaming"
+                style="flex-shrink: 0"
+                @click="startGuidance"
+              >
+                <template #icon>
+                  <Icon icon="lucide:lightbulb" :width="16" />
+                </template>
+                帮我写清楚
+              </n-button>
+            </template>
+            AI 教练会问你几个问题，帮你把想要的效果描述清楚
+          </n-tooltip>
+        </n-flex>
+        <n-flex justify="space-between" align="center" style="margin-top: 8px">
+          <n-tooltip>
+            <template #trigger>
+              <n-button quaternary :disabled="!hasVersion || streaming" @click="openProblem">
+                <template #icon>
+                  <Icon icon="lucide:bug" :width="16" />
+                </template>
+                出问题了
+              </n-button>
+            </template>
+            网页哪里不对？说清楚做了什么、想看到什么、实际看到了什么
+          </n-tooltip>
+          <n-flex align="center" :size="8">
+            <n-select
+              v-model:value="selectedModel"
+              :options="modelOptions"
+              style="width: 150px"
+              :disabled="streaming"
+            />
+            <n-button v-if="streaming" type="error" @click="stopPrompt">
+              停止
+            </n-button>
+            <n-button
+              v-else
+              type="primary"
+              :disabled="!input.trim() || !connected"
+              @click="send"
+            >
+              发送
+            </n-button>
+          </n-flex>
+        </n-flex>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed, onUnmounted } from "vue"
+import { ref, reactive, watch, nextTick, computed, onUnmounted } from "vue"
 import { useStorage } from "@vueuse/core"
 import { useMessage } from "naive-ui"
 import { Icon } from "../../icons"
@@ -233,6 +275,46 @@ async function deletePair(assistantMsgId: number) {
 async function send() {
   const text = input.value.trim()
   if (!text || streaming.value) return
+  // 只说“不行”“没反应”，AI 只能瞎猜；提醒一次，学生选“直接发”以后这次就不再拦
+  if (!skipVagueCheck && hasVersion.value && [...text].length <= 15 && VAGUE.test(text)) {
+    vagueHint.value = true
+    return
+  }
+  input.value = ""
+  await props.beforeSend?.()
+  sendPrompt(text, selectedModel.value)
+}
+
+// “出问题了”：做了什么、想看到什么、实际看到了什么，拼成一句发给 AI
+const VAGUE =
+  /不行|不对|没反应|没用|没效果|用不了|不能用|不能玩|动不了|进不去|打不开|没显示|不显示|显示不出|bug|出错|报错|错了|坏了|白屏|空白|有问题/i
+const vagueHint = ref(false)
+let skipVagueCheck = false
+const problemOpen = ref(false)
+const problem = reactive({ did: "", want: "", saw: "" })
+
+watch(input, () => (vagueHint.value = false))
+
+const hasVersion = computed(() => messages.value.some((m) => m.role === "assistant" && hasCode(m)))
+
+function openProblem() {
+  vagueHint.value = false
+  problemOpen.value = true
+}
+
+function sendAnyway() {
+  skipVagueCheck = true
+  vagueHint.value = false
+  send()
+}
+
+async function sendProblem() {
+  const part = (s: string) => s.trim().replace(/[。，,.！!；;]+$/, "")
+  const did = part(problem.did).replace(/^我/, "")
+  const want = part(problem.want)
+  const text = `我${did}，${want ? `想看到${want}，` : ""}但实际${part(problem.saw)}。`
+  Object.assign(problem, { did: "", want: "", saw: "" })
+  problemOpen.value = false
   input.value = ""
   await props.beforeSend?.()
   sendPrompt(text, selectedModel.value)
@@ -445,6 +527,31 @@ watch([() => messages.value.length, streamingContent], () => {
   color: var(--wp-faint);
   margin-top: 4px;
   animation: pulse 1.5s ease-in-out infinite;
+}
+
+.vague-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--wp-brand-soft);
+  font-size: 13px;
+}
+
+.problem-title {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.problem label {
+  display: block;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: var(--wp-muted);
 }
 
 .input-area {

@@ -119,6 +119,11 @@
           </n-popconfirm>
         </section>
 
+        <section v-if="sub.reflection">
+          <h4>学生说</h4>
+          <div class="reflection">{{ sub.reflection }}</div>
+        </section>
+
         <section>
           <n-flex justify="space-between" align="center" class="chain-head">
             <h4>提示词 <span class="muted" v-if="chainSteps">· {{ chainSteps }} 轮</span></h4>
@@ -477,6 +482,17 @@ h4 {
 
 .wide .rates {
   flex-wrap: wrap;
+}
+
+/* 交的时候写的反思 */
+.reflection {
+  padding: 6px 10px;
+  border-left: 3px solid var(--wp-brand);
+  background: var(--wp-brand-soft);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .chain {

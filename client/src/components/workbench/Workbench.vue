@@ -103,6 +103,12 @@
     </template>
   </n-split>
   <PasteCodeModal v-model:show="showPaste" :on-save="savePasted" />
+  <SubmitModal
+    v-model:show="showSubmit"
+    :title="submitTitle"
+    :has-earlier="submitHasEarlier"
+    :on-submit="submitChallenge"
+  />
   <n-drawer v-model:show="showHistory" :width="420" placement="right">
     <n-drawer-content title="全部历史" :native-scrollbar="false" body-content-style="padding: 0">
       <PromptHistoryPanel
@@ -128,6 +134,7 @@ import Preview from "../editor/Preview.vue"
 import CodeTabs from "./CodeTabs.vue"
 import VersionBar, { type VersionItem } from "./VersionBar.vue"
 import PasteCodeModal from "./PasteCodeModal.vue"
+import SubmitModal from "./SubmitModal.vue"
 import { Prompt, Submission } from "../../api"
 import { useTaskCode } from "../../composables/useTaskCode"
 import {
@@ -174,6 +181,7 @@ const selectedId = ref<number | null>(null)
 const busy = ref(false)
 const briefOpen = ref(true)
 const showPaste = ref(false)
+const showSubmit = ref(false)
 const showHistory = ref(false)
 const historyKey = ref(0)
 
@@ -308,21 +316,46 @@ function openHistory() {
 }
 
 async function submit() {
+  if (props.kind === "challenge") {
+    showSubmit.value = true
+    return
+  }
   busy.value = true
   try {
-    if (props.kind === "creation") {
-      await props.saveWork?.({ ...code })
-      message.success("作品已保存")
-      return
-    }
+    await props.saveWork?.({ ...code })
+    message.success("作品已保存")
+  } catch (err: any) {
+    message.error(err.response?.data?.detail ?? "保存失败，请重试")
+  } finally {
+    busy.value = false
+  }
+}
+
+const submitTitle = computed(() => {
+  if (modified.value || !selectedId.value) return "交当前修改"
+  const n = versions.value.find((v) => v.id === selectedId.value)?.n
+  return n ? `交 v${n}` : "交这一版"
+})
+
+// 要交的这一版之前还有版本（当前修改会存成新的一版）
+const submitHasEarlier = computed(() => {
+  if (modified.value || !selectedId.value) return versions.value.length > 0
+  return (versions.value.find((v) => v.id === selectedId.value)?.n ?? 1) > 1
+})
+
+// 挑战：先在弹框里写一句反思（可以不写）再交；出错时抛出去，弹框不关
+async function submitChallenge(reflection: string) {
+  busy.value = true
+  try {
     const id =
       modified.value || !selectedId.value ? await saveAsVersion() : selectedId.value
-    await Submission.create(props.taskId, { ...code }, id)
+    await Submission.create(props.taskId, { ...code }, id, reflection)
     markMessageSubmitted(id)
     const n = versions.value.find((v) => v.id === id)?.n
     message.success(n ? `已提交 v${n}` : "已提交")
   } catch (err: any) {
     message.error(err.response?.data?.detail ?? "提交失败，请重试")
+    throw err
   } finally {
     busy.value = false
   }
