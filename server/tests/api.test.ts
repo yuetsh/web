@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test"
-import { get, all } from "../src/db"
+import { get, all, run } from "../src/db"
 import { app } from "../src/app"
 import { config } from "../src/config"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
@@ -607,5 +607,42 @@ describe("同学作品与批改", () => {
     expect(options.json.classes).toEqual(["c1", "c2"])
 
     expect((await teacher("PUT", `/api/submission/${uuid(latest)}/flag`, { flag: "present" })).json.flag).toBe("present")
+  })
+})
+
+describe("课堂总结", () => {
+  test("按班级统计，高分作品每人只取最高的一份", async () => {
+    makeUser("adm", "admin")
+    const task = makeTask("挑战", "challenge", 1)
+    const a = makeUser("weba1小明", "normal", "a1")
+    const b = makeUser("weba1小红", "normal", "a1")
+    makeUser("weba1小刚", "normal", "a1")
+    const other = makeUser("weba2小李", "normal", "a2")
+    makeSubmission(a, task, 3, "2026-01-01 00:00:00.000000")
+    const aBest = makeSubmission(a, task, 4.5, "2026-01-02 00:00:00.000000")
+    makeSubmission(a, task, 4, "2026-01-03 00:00:00.000000")
+    const bSub = makeSubmission(b, task, 0)
+    run(`UPDATE submission_submission SET flag = 'present' WHERE id = $id`, { id: bSub })
+    makeSubmission(other, task, 5)
+
+    const adm = await client("adm")
+    const res = await adm("GET", `/api/submission/stats/${task}?classname=a1`)
+    expect(res.status).toBe(200)
+    expect(res.json).toMatchObject({
+      submitted_count: 2,
+      unsubmitted_count: 1,
+      average_score: 4,
+      unrated_count: 2,
+      present_count: 1,
+      classes: ["a1", "a2"],
+      submission_count_distribution: { count_1: 1, count_2: 0, count_3: 1, count_4_plus: 0 },
+    })
+    expect(res.json.unsubmitted_users).toEqual([{ username: "weba1小刚", classname: "a1" }])
+    expect(res.json.top_scored).toEqual([
+      { username: "weba1小明", classname: "a1", score: 4.5, submission_id: uuid(aBest) },
+    ])
+
+    const all = await adm("GET", `/api/submission/stats/${task}`)
+    expect(all.json.top_scored.map((t: any) => t.username)).toEqual(["weba2小李", "weba1小明"])
   })
 })

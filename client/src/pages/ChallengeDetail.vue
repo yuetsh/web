@@ -25,7 +25,7 @@
             <Icon :width="16" icon="lucide:bar-chart-2" />
           </n-button>
         </template>
-        本题统计
+        课堂总结
       </n-tooltip>
       <n-tooltip v-if="roleSuper">
         <template #trigger>
@@ -53,7 +53,7 @@
       </div>
     </template>
   </Workbench>
-  <TaskStatsModal v-model:show="showStats" :task-id="taskId" />
+  <TaskStatsModal v-model:show="showStats" :task-id="taskId" :title="title" />
   <PeersDrawer v-model:show="showPeers" :task-id="taskId" :asset-base-url="assetBaseUrl" />
   <n-modal
     v-model:show="showAssets"

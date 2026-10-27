@@ -448,25 +448,18 @@ router.get("/stats/:task_id", (c) => {
     else dist.count_4_plus++
   }
 
-  // 标记统计：该任务所有提交（不按学生过滤）
-  const flagStats = { red: 0, blue: 0, green: 0, yellow: 0 }
-  for (const s of subs) {
-    if (s.flag && s.flag in flagStats) flagStats[s.flag as keyof typeof flagStats]++
+  // 高分作品：每人分数最高的一份（同分取较早的），取前五
+  const best = new Map<number, (typeof subs)[number]>()
+  for (const s of studentSubs) {
+    const cur = best.get(s.user_id)
+    if (s.score > 0 && (!cur || s.score > cur.score || (s.score === cur.score && s.created < cur.created)))
+      best.set(s.user_id, s)
   }
-
-  const topViewed = classname
-    ? all(
-        `SELECT s.id, s.view_count, u.username, u.classname ${SUBMISSION_FROM}
-         WHERE s.task_id = $id AND u.role = 'normal' AND u.classname = $classname
-         ORDER BY s.view_count DESC LIMIT 5`,
-        { id: taskId, classname },
-      )
-    : all(
-        `SELECT s.id, s.view_count, u.username, u.classname ${SUBMISSION_FROM}
-         WHERE s.task_id = $id AND u.role = 'normal'
-         ORDER BY s.view_count DESC LIMIT 5`,
-        { id: taskId },
-      )
+  const studentById = new Map(students.map((s) => [s.id, s]))
+  const topScored = [...best.values()]
+    .sort((a, b) => b.score - a.score || (a.created < b.created ? -1 : 1))
+    .slice(0, 5)
+    .map((s) => ({ ...tag(studentById.get(s.user_id)!), score: s.score, submission_id: uuidOut(s.id) }))
 
   const unrated = students.filter((s) => submittedIds.has(s.id) && !ratedIds.has(s.id))
   return c.json({
@@ -477,14 +470,9 @@ router.get("/stats/:task_id", (c) => {
     unsubmitted_users: students.filter((s) => !submittedIds.has(s.id)).map(tag),
     unrated_users: unrated.map(tag),
     submission_count_distribution: dist,
-    flag_stats: flagStats,
+    present_count: studentSubs.filter((s) => s.flag === "present").length,
     classes,
-    top_viewed: topViewed.map((s) => ({
-      username: s.username,
-      classname: s.classname,
-      view_count: s.view_count,
-      submission_id: uuidOut(s.id),
-    })),
+    top_scored: topScored,
   })
 })
 

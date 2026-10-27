@@ -3,452 +3,526 @@
     :show="show"
     @update:show="$emit('update:show', $event)"
     preset="card"
-    title="提交统计"
-    style="max-width: 660px"
+    style="width: 90vw; max-width: 760px"
     :bordered="false"
   >
-    <div style="max-height: 75vh; overflow-y: auto">
-      <!-- 初始加载 -->
-      <template v-if="!stats && loading">
-        <n-flex justify="center" style="padding: 40px">
-          <n-spin size="large" />
-        </n-flex>
-      </template>
+    <template #header>
+      <div class="head">
+        <b>课堂总结</b>
+        <span v-if="title" class="task-title">{{ title }}</span>
+      </div>
+    </template>
+    <template #header-extra>
+      <n-select
+        :value="classname"
+        :options="classOptions"
+        size="small"
+        @update:value="selectClass"
+        style="width: 140px; margin-right: 12px"
+      />
+    </template>
 
-      <template v-else-if="stats">
-        <!-- 班级筛选 -->
-        <n-flex
-          align="center"
-          style="margin-bottom: 16px; flex-wrap: wrap; gap: 6px"
-        >
-          <span style="color: var(--wp-muted); font-size: 12px">班级筛选：</span>
-          <n-button
-            size="small"
-            :type="selectedClass === null ? 'primary' : 'default'"
-            @click="selectClass(null)"
-            >全部</n-button
-          >
-          <n-button
-            v-for="c in stats.classes"
-            :key="c"
-            size="small"
-            :type="selectedClass === c ? 'primary' : 'default'"
-            @click="selectClass(c)"
-            >{{ c }}</n-button
-          >
-        </n-flex>
+    <n-flex v-if="!stats" justify="center" style="padding: 60px">
+      <n-spin />
+    </n-flex>
 
-        <n-spin :show="loading">
-          <!-- 关键指标 -->
-          <div
-            style="
-              display: grid;
-              grid-template-columns: repeat(5, 1fr);
-              border: 1px solid var(--wp-line);
-              border-radius: 6px;
-              overflow: hidden;
-              margin-bottom: 12px;
-            "
-          >
-            <div
-              v-for="(metric, i) in metrics"
-              :key="metric.label"
-              :style="{
-                padding: '12px 8px',
-                textAlign: 'center',
-                borderRight: i < metrics.length - 1 ? '1px solid var(--wp-line)' : 'none',
-              }"
-            >
-              <div
-                :style="{
-                  fontSize: '20px',
-                  fontWeight: '700',
-                  color: metric.color,
-                }"
-              >
-                {{ metric.value }}
-              </div>
-              <div style="color: var(--wp-muted); font-size: 11px; margin-top: 2px">
-                {{ metric.label }}
-              </div>
+    <n-spin v-else :show="loading">
+      <div class="body">
+        <!-- 关键数字 -->
+        <div class="kpis">
+          <div class="kpi wide">
+            <div class="kpi-label">已交</div>
+            <div class="kpi-value">
+              {{ stats.submitted_count }}<small> / {{ total }} 人</small>
+              <span class="pct">{{ pct(stats.submitted_count, total) }}</span>
+            </div>
+            <div class="bar">
+              <span :style="{ width: pct(stats.submitted_count, total) }"></span>
             </div>
           </div>
-
-          <!-- 未提交名单（可折叠） -->
-          <div
-            style="
-              border: 1px solid var(--wp-line);
-              border-radius: 6px;
-              margin-bottom: 8px;
-              overflow: hidden;
-            "
-          >
-            <div
-              style="
-                padding: 10px 14px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                cursor: pointer;
-                background: var(--wp-bad-soft);
-              "
-              @click="showUnsubmitted = !showUnsubmitted"
-            >
-              <n-flex align="center" :size="6">
-                <span
-                  style="
-                    width: 7px;
-                    height: 7px;
-                    background: var(--wp-bad);
-                    border-radius: 50%;
-                    display: inline-block;
-                  "
-                ></span>
-                <span style="font-weight: 600; color: var(--wp-bad); font-size: 12px"
-                  >未提交（{{ stats.unsubmitted_count }}人）</span
-                >
-              </n-flex>
-              <Icon
-                :icon="
-                  showUnsubmitted
-                    ? 'lucide:chevron-down'
-                    : 'lucide:chevron-right'
-                "
-                :width="14"
-                style="color: var(--wp-faint)"
-              />
-            </div>
-            <div
-              v-if="showUnsubmitted"
-              style="
-                padding: 10px 14px;
-                background: var(--wp-bad-soft);
-                display: flex;
-                flex-wrap: wrap;
-                gap: 5px;
-              "
-            >
-              <n-tag
-                v-for="u in stats.unsubmitted_users"
-                :key="u.username"
-                size="small"
-                :bordered="true"
-                style="border-color: var(--wp-bad-soft); background: var(--wp-surface)"
-                >{{ displayName(u.username, u.classname) }}</n-tag
-              >
-              <span
-                v-if="!stats.unsubmitted_users.length"
-                style="color: var(--wp-faint); font-size: 12px"
-                >暂无</span
-              >
-            </div>
+          <div class="kpi">
+            <div class="kpi-label">平均分</div>
+            <div class="kpi-value">{{ stats.average_score?.toFixed(1) ?? "—" }}</div>
+            <div class="kpi-note">每人最新一版</div>
           </div>
-
-          <!-- 未打分名单（可折叠） -->
-          <div
-            style="
-              border: 1px solid var(--wp-line);
-              border-radius: 6px;
-              margin-bottom: 12px;
-              overflow: hidden;
-            "
-          >
-            <div
-              style="
-                padding: 10px 14px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                cursor: pointer;
-                background: var(--wp-warn-soft);
-              "
-              @click="showUnrated = !showUnrated"
-            >
-              <n-flex align="center" :size="6">
-                <span
-                  style="
-                    width: 7px;
-                    height: 7px;
-                    background: var(--wp-warn);
-                    border-radius: 50%;
-                    display: inline-block;
-                  "
-                ></span>
-                <span style="font-weight: 600; color: var(--wp-warn); font-size: 12px"
-                  >未打分（{{ stats.unrated_count }}人）</span
-                >
-                <span style="font-size: 11px; color: var(--wp-faint)"
-                  >— 还没给任何提交打过分</span
-                >
-              </n-flex>
-              <Icon
-                :icon="
-                  showUnrated ? 'lucide:chevron-down' : 'lucide:chevron-right'
-                "
-                :width="14"
-                style="color: var(--wp-faint)"
-              />
-            </div>
-            <div
-              v-if="showUnrated"
-              style="
-                padding: 10px 14px;
-                background: var(--wp-warn-soft);
-                display: flex;
-                flex-wrap: wrap;
-                gap: 5px;
-              "
-            >
-              <n-tag
-                v-for="u in stats.unrated_users"
-                :key="u.username"
-                size="small"
-                :bordered="true"
-                style="border-color: var(--wp-warn-soft); background: var(--wp-surface)"
-                >{{ displayName(u.username, u.classname) }}</n-tag
-              >
-              <span
-                v-if="!stats.unrated_users.length"
-                style="color: var(--wp-faint); font-size: 12px"
-                >暂无</span
-              >
-            </div>
+          <div class="kpi">
+            <div class="kpi-label">改过再交</div>
+            <div class="kpi-value">{{ pct(multiSubmit, stats.submitted_count) }}</div>
+            <div class="kpi-note">交了 2 次及以上</div>
           </div>
+          <div class="kpi">
+            <div class="kpi-label">待讲评</div>
+            <div class="kpi-value">{{ stats.present_count }}<small> 份</small></div>
+            <div class="kpi-note">已加入课上展示</div>
+          </div>
+        </div>
 
-          <!-- 提交次数分布 -->
-          <div style="margin-bottom: 12px">
-            <div
-              style="
-                font-weight: 600;
-                font-size: 13px;
-                margin-bottom: 8px;
-                color: var(--wp-ink);
-              "
-            >
-              提交次数分布
-              <span style="font-size: 11px; color: var(--wp-faint); font-weight: 400"
-                >（已提交的 {{ stats.submitted_count }} 人）</span
-              >
+        <div class="grid">
+          <!-- 未交 -->
+          <section>
+            <h4>
+              <i class="dot bad"></i>未交
+              <span class="count">{{ stats.unsubmitted_count }} 人</span>
+            </h4>
+            <div class="names">
+              <template v-for="g in unsubmittedGroups" :key="g.classname">
+                <div v-if="isAll" class="class-label">{{ g.classname || "未分班" }}</div>
+                <div class="chips">
+                  <span v-for="n in g.names" :key="n" class="chip">{{ n }}</span>
+                </div>
+              </template>
+              <div v-if="!stats.unsubmitted_count" class="empty">都交了</div>
             </div>
-            <div style="display: flex; gap: 8px">
-              <div
-                v-for="bucket in countBuckets"
-                :key="bucket.label"
-                :style="{
-                  flex: 1,
-                  border: `1px solid ${bucket.borderColor}`,
-                  borderRadius: '6px',
-                  padding: '10px 8px',
-                  textAlign: 'center',
-                  background: bucket.bg,
-                }"
-              >
-                <div
-                  :style="{
-                    fontSize: '20px',
-                    fontWeight: '700',
-                    color: bucket.color,
-                  }"
-                >
-                  {{ bucket.value }}
+          </section>
+
+          <!-- 交了没人评 -->
+          <section>
+            <h4>
+              <i class="dot warn"></i>交了但还没人评
+              <span class="count">{{ stats.unrated_count }} 人</span>
+            </h4>
+            <div class="names">
+              <template v-for="g in unratedGroups" :key="g.classname">
+                <div v-if="isAll" class="class-label">{{ g.classname || "未分班" }}</div>
+                <div class="chips">
+                  <span v-for="n in g.names" :key="n" class="chip">{{ n }}</span>
                 </div>
-                <div style="color: var(--wp-faint); font-size: 11px; margin-top: 2px">
-                  {{ bucket.label }}
-                </div>
-                <div
-                  style="
-                    margin-top: 8px;
-                    background: var(--wp-line);
-                    border-radius: 3px;
-                    height: 4px;
-                  "
-                >
-                  <div
-                    :style="{
-                      background: bucket.color,
-                      height: '4px',
-                      borderRadius: '3px',
-                      width: bucketPct(bucket.value),
-                    }"
-                  ></div>
-                </div>
-                <div style="color: var(--wp-faint); font-size: 10px; margin-top: 3px">
-                  {{ bucketPct(bucket.value) }}
-                </div>
+              </template>
+              <div v-if="!stats.unrated_count" class="empty">
+                {{ stats.submitted_count ? "每份作品都有人评过" : "还没有人交" }}
               </div>
             </div>
-          </div>
+          </section>
 
-          <!-- 人气前五 -->
-          <div>
-            <div
-              style="
-                font-weight: 600;
-                font-size: 13px;
-                margin-bottom: 8px;
-                color: var(--wp-ink);
-              "
-            >
-              人气前五
+          <!-- 交了几次 -->
+          <section>
+            <h4>交了几次</h4>
+            <div v-if="stats.submitted_count" class="hist">
+              <template v-for="b in buckets" :key="b.label">
+                <span class="hist-label">{{ b.label }}</span>
+                <span class="hist-bar">
+                  <span :style="{ width: pct(b.value, maxBucket) }"></span>
+                </span>
+                <span class="hist-value">{{ b.value }}</span>
+              </template>
             </div>
-            <div
-              v-if="stats.top_viewed.length === 0"
-              style="color: var(--wp-faint); font-size: 12px"
-            >
-              暂无
-            </div>
-            <div v-else style="display: flex; flex-direction: column; gap: 6px">
-              <div
-                v-for="(item, i) in stats.top_viewed"
+            <div v-else class="empty">还没有人交</div>
+          </section>
+
+          <!-- 高分作品 -->
+          <section>
+            <h4>高分作品<span class="count">每人最高的一版</span></h4>
+            <div v-if="stats.top_scored.length" class="top">
+              <button
+                v-for="(item, i) in stats.top_scored"
                 :key="item.submission_id"
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 8px;
-                  padding: 6px 10px;
-                  border: 1px solid var(--wp-line);
-                  border-radius: 6px;
-                  cursor: pointer;
-                  background: var(--wp-paper);
-                "
-                @click="viewSubmission(item.submission_id)"
+                class="top-row"
+                @click="openSubmission(item)"
               >
-                <span
-                  :style="{
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    background:
-                      i < 3 ? ['var(--wp-warn)', 'var(--wp-muted)', 'var(--wp-warn)'][i] : 'var(--wp-line)',
-                    color: 'var(--wp-surface)',
-                    fontSize: '11px',
-                    fontWeight: '700',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }"
-                  >{{ i + 1 }}</span
-                >
-                <span style="flex: 1; font-size: 13px; color: var(--wp-ink)">
-                  {{ displayName(item.username, item.classname) }}
+                <span class="rank">{{ i + 1 }}</span>
+                <span class="top-name">
+                  {{ shortName(item.username, item.classname) }}
+                  <small v-if="isAll">{{ item.classname }}</small>
                 </span>
-                <span style="font-size: 12px; color: var(--wp-css); font-weight: 600">
-                  {{ item.view_count }} 次
-                </span>
-              </div>
+                <span class="top-score">{{ item.score.toFixed(1) }}</span>
+                <Icon icon="lucide:chevron-right" :width="14" class="go" />
+              </button>
             </div>
-          </div>
-        </n-spin>
-      </template>
-    </div>
+            <div v-else class="empty">还没有打过分的作品</div>
+          </section>
+        </div>
+      </div>
+    </n-spin>
+
+    <template #footer>
+      <n-flex justify="end">
+        <n-button type="primary" icon-placement="right" @click="openReview">
+          去批改{{ isAll ? "" : " " + classname + " 班" }}
+          <template #icon><Icon icon="lucide:arrow-right" /></template>
+        </n-button>
+      </n-flex>
+    </template>
   </n-modal>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch } from "vue"
-import { Icon } from "../../icons"
+import { computed, ref, watch } from "vue"
 import { useRouter } from "vue-router"
+import { Icon } from "../../icons"
 import { Submission } from "../../api"
-import type { TaskStatsOut } from "../../utils/type"
+import type { TaskStatsOut, TopScoredItem, UserTag } from "../../utils/type"
 
-const props = defineProps<{ taskId: number; show: boolean }>()
-const emit = defineEmits<{ (e: "update:show", v: boolean): void }>()
+// 老师下课前看的这道题的总结：默认看批改页正在看的班
+const props = defineProps<{ taskId: number; show: boolean; title?: string }>()
+defineEmits<{ (e: "update:show", v: boolean): void }>()
+
+// 和批改页共用“当前班级”
+const ALL = "__all__"
+const CLASS_KEY = "review-class"
 
 const router = useRouter()
 const stats = ref<TaskStatsOut | null>(null)
 const loading = ref(false)
-const selectedClass = ref<string | null>(null)
-const showUnsubmitted = ref(false)
-const showUnrated = ref(false)
+const classname = ref<string>(ALL)
+const isAll = computed(() => classname.value === ALL)
 
-async function load(classname?: string) {
+const classOptions = computed(() => [
+  { label: "全部班级", value: ALL },
+  ...(stats.value?.classes ?? []).map((c) => ({ label: `${c} 班`, value: c })),
+])
+
+const total = computed(
+  () => (stats.value?.submitted_count ?? 0) + (stats.value?.unsubmitted_count ?? 0),
+)
+const multiSubmit = computed(() => {
+  const d = stats.value?.submission_count_distribution
+  return d ? d.count_2 + d.count_3 + d.count_4_plus : 0
+})
+const buckets = computed(() => {
+  const d = stats.value?.submission_count_distribution
+  if (!d) return []
+  return [
+    { label: "1 次", value: d.count_1 },
+    { label: "2 次", value: d.count_2 },
+    { label: "3 次", value: d.count_3 },
+    { label: "4 次+", value: d.count_4_plus },
+  ]
+})
+const maxBucket = computed(() => Math.max(...buckets.value.map((b) => b.value)))
+
+const unsubmittedGroups = computed(() => byClass(stats.value?.unsubmitted_users ?? []))
+const unratedGroups = computed(() => byClass(stats.value?.unrated_users ?? []))
+
+function byClass(users: UserTag[]) {
+  const groups = new Map<string, string[]>()
+  for (const u of users) {
+    const names = groups.get(u.classname) ?? []
+    names.push(shortName(u.username, u.classname))
+    groups.set(u.classname, names)
+  }
+  // 没分班的（测试账号等）放最后
+  return [...groups]
+    .sort(([a], [b]) => Number(a === "") - Number(b === "") || (a < b ? -1 : 1))
+    .map(([classname, names]) => ({ classname, names }))
+}
+
+// 账号是“web + 班级 + 名字”，班级已经单独显示了
+function shortName(username: string, classname: string) {
+  const prefix = "web" + classname
+  return username.startsWith(prefix) ? username.slice(prefix.length) : username
+}
+
+function pct(value: number, of: number) {
+  return of ? Math.round((value / of) * 100) + "%" : "0%"
+}
+
+async function load() {
   loading.value = true
   try {
-    stats.value = await Submission.getStats(props.taskId, classname)
+    stats.value = await Submission.getStats(props.taskId, isAll.value ? undefined : classname.value)
   } finally {
     loading.value = false
   }
 }
 
-function displayName(username: string, classname: string) {
-  const prefix = "web" + classname
-  return username.startsWith(prefix) ? username.slice(prefix.length) : username
+function selectClass(c: string) {
+  classname.value = c
+  try {
+    localStorage.setItem(CLASS_KEY, c)
+  } catch {}
+  load()
 }
 
-function selectClass(c: string | null) {
-  selectedClass.value = c
-  load(c ?? undefined)
-}
-
-function viewSubmission(id: string) {
-  const { href } = router.resolve({ name: "submission", params: { id } })
-  window.open(href, "_blank")
-}
-
-function bucketPct(value: number) {
-  const total = stats.value?.submitted_count ?? 0
-  if (!total) return "0%"
-  return Math.round((value / total) * 100) + "%"
-}
-
-const metrics = computed(() => {
-  if (!stats.value) return []
-  return [
-    { label: "已提交", value: stats.value.submitted_count, color: "var(--wp-brand)" },
-    { label: "未提交", value: stats.value.unsubmitted_count, color: "var(--wp-bad)" },
-    {
-      label: "平均分",
-      value: stats.value.average_score?.toFixed(1) ?? "—",
-      color: "var(--wp-css)",
-    },
-    { label: "未打分", value: stats.value.unrated_count, color: "var(--wp-bad)" },
-  ]
-})
-
-const countBuckets = computed(() => {
-  if (!stats.value) return []
-  const d = stats.value.submission_count_distribution
-  return [
-    {
-      label: "4 次+",
-      value: d.count_4_plus,
-      color: "var(--wp-warn)",
-      bg: "var(--wp-warn-soft)",
-      borderColor: "var(--wp-warn-soft)",
-    },
-    {
-      label: "3 次",
-      value: d.count_3,
-      color: "var(--wp-brand)",
-      bg: "var(--wp-brand-soft)",
-      borderColor: "var(--wp-brand-soft)",
-    },
-    {
-      label: "2 次",
-      value: d.count_2,
-      color: "var(--wp-css)",
-      bg: "var(--wp-css-soft)",
-      borderColor: "var(--wp-css-soft)",
-    },
-    {
-      label: "仅 1 次",
-      value: d.count_1,
-      color: "var(--wp-muted)",
-      bg: "var(--wp-paper)",
-      borderColor: "var(--wp-line)",
-    },
-  ]
-})
-
-// Load when modal opens
 watch(
   () => props.show,
-  (val) => {
-    if (val && props.taskId) {
-      selectedClass.value = null
-      load()
+  async (open) => {
+    if (!open || !props.taskId) return
+    try {
+      classname.value = localStorage.getItem(CLASS_KEY) || ALL
+    } catch {
+      classname.value = ALL
+    }
+    await load()
+    // 记住的班级已经没有学生了
+    if (!isAll.value && !stats.value?.classes.includes(classname.value)) {
+      classname.value = ALL
+      await load()
     }
   },
 )
+
+function openInNewTab(query: Record<string, string>) {
+  const { href } = router.resolve({ name: "review", query })
+  window.open(href, "_blank")
+}
+
+function openSubmission(item: TopScoredItem) {
+  openInNewTab({
+    class: isAll.value ? item.classname : classname.value,
+    task: String(props.taskId),
+    sub: item.submission_id,
+  })
+}
+
+function openReview() {
+  openInNewTab({ class: classname.value, task: String(props.taskId) })
+}
 </script>
+
+<style scoped>
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.task-title {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--wp-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.body {
+  max-height: 64vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  border: 1px solid var(--wp-line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.kpi {
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.kpi + .kpi {
+  border-left: 1px solid var(--wp-line);
+}
+
+.kpi.wide {
+  background: var(--wp-brand-soft);
+}
+
+.kpi-label {
+  font-size: 12px;
+  color: var(--wp-muted);
+}
+
+.kpi-value {
+  margin-top: 2px;
+  font: 600 22px/1.2 var(--wp-font-mono);
+  color: var(--wp-ink);
+}
+
+.kpi-value small {
+  font: 400 13px var(--wp-font-sans);
+  color: var(--wp-muted);
+}
+
+.kpi.wide .kpi-value {
+  color: var(--wp-brand);
+}
+
+.pct {
+  float: right;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--wp-muted);
+  line-height: 26px;
+}
+
+.kpi-note {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--wp-faint);
+}
+
+.bar {
+  margin-top: 8px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--wp-surface);
+  overflow: hidden;
+}
+
+.bar span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--wp-brand);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+
+section {
+  min-width: 0;
+}
+
+h4 {
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wp-ink);
+}
+
+.count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--wp-muted);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.dot.bad {
+  background: var(--wp-bad);
+}
+
+.dot.warn {
+  background: var(--wp-warn);
+}
+
+.names {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.class-label {
+  margin: 6px 0 4px;
+  font-size: 11px;
+  color: var(--wp-faint);
+}
+
+.class-label:first-child {
+  margin-top: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  padding: 1px 8px;
+  border: 1px solid var(--wp-line);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--wp-ink);
+  background: var(--wp-paper);
+}
+
+.empty {
+  font-size: 12px;
+  color: var(--wp-faint);
+}
+
+.hist {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.hist-label {
+  font-size: 12px;
+  color: var(--wp-muted);
+}
+
+.hist-bar {
+  height: 10px;
+  border-radius: 2px;
+  background: var(--wp-paper);
+  overflow: hidden;
+}
+
+.hist-bar span {
+  display: block;
+  height: 100%;
+  background: var(--wp-brand);
+}
+
+.hist-value {
+  min-width: 2ch;
+  text-align: right;
+  font: 12px var(--wp-font-mono);
+  color: var(--wp-ink);
+}
+
+.top {
+  display: flex;
+  flex-direction: column;
+}
+
+.top-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--wp-ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.top-row:hover {
+  background: var(--wp-paper);
+}
+
+.rank {
+  width: 16px;
+  font: 12px var(--wp-font-mono);
+  color: var(--wp-faint);
+  text-align: center;
+}
+
+.top-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-name small {
+  margin-left: 4px;
+  color: var(--wp-faint);
+}
+
+.top-score {
+  font: 600 13px var(--wp-font-mono);
+  color: var(--wp-brand);
+}
+
+.go {
+  color: var(--wp-faint);
+}
+</style>

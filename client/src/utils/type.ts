@@ -181,25 +181,10 @@ export interface SubmissionCountBucket {
   count_4_plus: number
 }
 
-export interface ScoreBucket {
-  range_1_2: number
-  range_2_3: number
-  range_3_4: number
-  range_4_5: number
-  range_5: number
-}
-
-export interface FlagStats {
-  red: number
-  blue: number
-  green: number
-  yellow: number
-}
-
-export interface TopViewedItem {
+export interface TopScoredItem {
   username: string
   classname: string
-  view_count: number
+  score: number
   submission_id: string
 }
 
@@ -211,10 +196,9 @@ export interface TaskStatsOut {
   unsubmitted_users: UserTag[]
   unrated_users: UserTag[]
   submission_count_distribution: SubmissionCountBucket
-  score_distribution: ScoreBucket
-  flag_stats: FlagStats
+  present_count: number
   classes: string[]
-  top_viewed: TopViewedItem[]
+  top_scored: TopScoredItem[]
 }
 
 export type GradebookTaskType = "tutorial" | "challenge"
