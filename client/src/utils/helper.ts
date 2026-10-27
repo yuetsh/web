@@ -21,6 +21,7 @@ export function goHome(router: any, type: TASK_TYPE, display: number) {
 export function sourceLabel(source: string | null | undefined) {
   if (source === "edit") return "手改"
   if (source === "manual") return "外部 AI"
+  if (source === "guidance") return "引导"
   return "AI 对话"
 }
 

@@ -646,3 +646,16 @@ describe("课堂总结", () => {
     expect(all.json.top_scored.map((t: any) => t.username)).toEqual(["weba2小李", "weba1小明"])
   })
 })
+
+describe("提示词分类", () => {
+  test("太短的提问不打层级，以前打的也清掉", async () => {
+    const { classifyMessage } = await import("../src/services/classifier")
+    const { createConversation, insertMessage } = await import("../src/services/prompt")
+    const conv = createConversation(makeUser("stu"), makeTask("T"))
+    const id = insertMessage({ conversation_id: conv, role: "user", content: " 1 " })
+    run(`UPDATE prompt_message SET prompt_level = 6 WHERE id = $id`, { id })
+    expect(await classifyMessage(id)).toBeNull()
+    const row = get<{ prompt_level: number | null }>(`SELECT prompt_level FROM prompt_message WHERE id = $id`, { id })
+    expect(row!.prompt_level).toBeNull()
+  })
+})

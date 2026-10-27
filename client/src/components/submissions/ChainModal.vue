@@ -9,7 +9,7 @@
     <template #header>
       <div class="head">
         <b>提示词</b>
-        <span v-if="rounds.length" class="muted">{{ rounds.length }} 轮</span>
+        <span v-if="steps" class="muted">{{ steps }} 轮</span>
         <span v-if="title" class="muted title">{{ title }}</span>
       </div>
     </template>
@@ -41,16 +41,17 @@
           <li
             v-for="(r, i) in rounds"
             :key="i"
-            :class="['round', { on: i === selected }]"
-            @click="selected = i"
+            :class="['round', { on: i === selected, guide: isGuide(r) }]"
+            @click="isGuide(r) || (selected = i)"
           >
             <div class="round-head">
-              <span class="num">{{ i + 1 }}</span>
+              <span class="num">{{ nums[i] }}</span>
               <span :class="['src', `src-${r.source || 'conversation'}`]">
                 {{ sourceLabel(r.source) }}
               </span>
               <span v-if="r.prompt_level" class="level">{{ levelLabel(r.prompt_level) }}</span>
               <span v-if="i === rounds.length - 1" class="final">交的这一版</span>
+              <span v-else-if="isGuide(r)" class="muted no-code">问写提示词的建议，不生成网页</span>
               <span v-else-if="!r.html" class="muted no-code">没有网页</span>
             </div>
             <div
@@ -65,7 +66,7 @@
 
         <div class="stage">
           <div class="stage-head">
-            <b>第 {{ selected + 1 }} 轮生成的网页</b>
+            <b>第 {{ nums[selected] }} 轮生成的网页</b>
             <span class="muted">↑ ↓ 切换</span>
           </div>
           <div class="frame">
@@ -109,6 +110,14 @@ const loading = ref(false)
 const rounds = ref<PromptRound[]>([])
 const selected = ref(0)
 const expanded = ref(new Set<number>())
+
+// 引导对话（问怎么写提示词）夹在 AI 对话中间，不算轮数，也不能选中
+const isGuide = (r: PromptRound) => r.source === "guidance"
+const steps = computed(() => rounds.value.filter((r) => !isGuide(r)).length)
+const nums = computed(() => {
+  let n = 0
+  return rounds.value.map((r) => (isGuide(r) ? "" : String(++n)))
+})
 
 const doc = computed(() => {
   const r = rounds.value[selected.value]
@@ -165,7 +174,9 @@ function onKey(e: KeyboardEvent) {
   const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0
   if (!step || !rounds.value.length) return
   e.preventDefault()
-  selected.value = Math.min(rounds.value.length - 1, Math.max(0, selected.value + step))
+  let i = selected.value + step
+  while (rounds.value[i] && isGuide(rounds.value[i]!)) i += step
+  if (rounds.value[i]) selected.value = i
   nextTick(() =>
     document.querySelector(".rounds .round.on")?.scrollIntoView({ block: "nearest" }),
   )
@@ -289,6 +300,25 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true))
 .src-manual {
   color: var(--wp-html);
   background: var(--wp-html-soft);
+}
+
+.src-guidance {
+  color: var(--wp-muted);
+  background: var(--wp-paper);
+}
+
+.round.guide {
+  border-style: dashed;
+  background: transparent;
+  cursor: default;
+}
+
+.round.guide:hover {
+  border-color: var(--wp-line);
+}
+
+.round.guide .q {
+  color: var(--wp-muted);
 }
 
 .level {

@@ -13,6 +13,8 @@ const CLASSIFY_SYSTEM_PROMPT = `你是一个教育评估专家。根据布鲁姆
 
 只返回一个数字（1-6），不要解释。`
 
+const MIN_PROMPT_CHARS = 4
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 async function callLlm(content: string): Promise<number | null> {
@@ -23,7 +25,8 @@ async function callLlm(content: string): Promise<number | null> {
         { role: "system", content: CLASSIFY_SYSTEM_PROMPT },
         { role: "user", content },
       ],
-      { maxTokens: 10, timeoutMs: 30_000 },
+      // 同一句提示词要得到同一个层级
+      { maxTokens: 10, temperature: 0, timeoutMs: 30_000 },
     )
     const match = /[1-6]/.exec(text)
     if (!match) {
@@ -43,6 +46,11 @@ export async function classifyMessage(messageId: number): Promise<number | null>
     { id: messageId },
   )
   if (!msg) return null
+  // “1”“，”“可以”这类太短，判断不出层级；清掉以前打的标签（--force 重标时）
+  if ([...msg.content.trim()].length < MIN_PROMPT_CHARS) {
+    run(`UPDATE prompt_message SET prompt_level = NULL WHERE id = $id`, { id: messageId })
+    return null
+  }
   const level = await callLlm(msg.content)
   if (level !== null) {
     run(`UPDATE prompt_message SET prompt_level = $level WHERE id = $id`, {

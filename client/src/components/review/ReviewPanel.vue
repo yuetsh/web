@@ -121,14 +121,14 @@
 
         <section>
           <n-flex justify="space-between" align="center" class="chain-head">
-            <h4>提示词 <span class="muted" v-if="chain.length">· {{ chain.length }} 轮</span></h4>
+            <h4>提示词 <span class="muted" v-if="chainSteps">· {{ chainSteps }} 轮</span></h4>
             <n-button v-if="chain.length" size="tiny" quaternary @click="showChain = true">
               逐轮看网页
             </n-button>
           </n-flex>
           <div v-if="!chain.length" class="muted">这份提交没有关联的提示词</div>
           <ol class="chain">
-            <li v-for="(r, i) in chain" :key="i">
+            <li v-for="(r, i) in chain" :key="i" :class="{ guide: r.source === 'guidance' }">
               <n-flex :size="6" align="center">
                 <span class="src">{{ sourceLabel(r.source) }}</span>
                 <span v-if="r.prompt_level" class="level">{{ levelLabel(r.prompt_level) }}</span>
@@ -195,6 +195,8 @@ const versions = ref<SubmissionOut[]>([])
 const chain = ref<PromptRound[]>([])
 const rating = ref(false)
 const showChain = ref(false)
+// 引导对话不生成网页，不算轮数
+const chainSteps = computed(() => chain.value.filter((r) => r.source !== "guidance").length)
 
 let awardsCache: Promise<AwardManageOut[]> | null = null
 const awards = ref<AwardManageOut[]>([])
@@ -487,6 +489,12 @@ h4 {
 
 .src {
   font-size: 11px;
+  color: var(--wp-muted);
+}
+
+/* 不是 list-item，就不占 ol 的序号 */
+.chain .guide {
+  display: block;
   color: var(--wp-muted);
 }
 

@@ -63,6 +63,7 @@ interface CompletionOptions {
   model?: string
   stream: boolean
   maxTokens?: number
+  temperature?: number
   signal?: AbortSignal
   timeoutMs?: number
 }
@@ -82,6 +83,7 @@ function buildRequest(messages: ChatMessage[], opts: CompletionOptions) {
     stream: opts.stream,
   }
   if (opts.maxTokens) body.max_tokens = opts.maxTokens
+  if (opts.temperature !== undefined) body.temperature = opts.temperature
   const apiKey = ark ? config.arkApiKey : config.llmApiKey
   if (!apiKey) throw new Error("未配置模型接口密钥")
   const baseUrl = (ark ? config.arkBaseUrl : config.llmBaseUrl).replace(/\/$/, "")
@@ -203,12 +205,13 @@ export function streamGuidance(history: ChatMessage[], signal?: AbortSignal) {
 
 export async function complete(
   messages: ChatMessage[],
-  opts: { model?: string; maxTokens?: number; timeoutMs?: number } = {},
+  opts: { model?: string; maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
 ): Promise<string> {
   const res = await buildRequest(messages, {
     model: opts.model ?? config.llmModel,
     stream: false,
     maxTokens: opts.maxTokens,
+    temperature: opts.temperature,
     timeoutMs: opts.timeoutMs,
   })
   await ensureOk(res)
