@@ -15,6 +15,7 @@ import {
   userFacingError,
   type ChatMessage,
 } from "./services/llm"
+import { classifyMessage, inBackground } from "./services/classifier"
 
 type Kind = "prompt" | "guidance"
 
@@ -116,11 +117,12 @@ async function handlePrompt(ws: WS, data: any) {
   const model = String(data.model ?? "")
   if (!prompt) return
 
-  ws.data.pendingUserMessageId = insertMessage({
+  const userMessageId = insertMessage({
     conversation_id: ws.data.conversationId,
     role: "user",
     content: prompt,
   })
+  ws.data.pendingUserMessageId = userMessageId
   try {
     const history: ChatMessage[] = conversationHistory(ws.data.conversationId).map((m) => ({
       role: m.role as ChatMessage["role"],
@@ -146,6 +148,8 @@ async function handlePrompt(ws: WS, data: any) {
       code_css: code.css,
       code_js: code.js,
     })
+    // 有了回复，这条提问才留下来；在后台打 L1–L6 层级
+    inBackground(classifyMessage(userMessageId))
     ws.data.pendingUserMessageId = null
     send(ws, { type: "complete", code, message_id: messageId })
   } finally {
@@ -157,12 +161,13 @@ async function handleGuidance(ws: WS, data: any) {
   const prompt = String(data.content ?? "").trim()
   if (!prompt) return
 
-  ws.data.pendingUserMessageId = insertMessage({
+  const userMessageId = insertMessage({
     conversation_id: ws.data.conversationId,
     role: "user",
     content: prompt,
     source: "guidance",
   })
+  ws.data.pendingUserMessageId = userMessageId
   ws.data.guidanceHistory.push({ role: "user", content: prompt })
   try {
     let full: string
@@ -185,6 +190,7 @@ async function handleGuidance(ws: WS, data: any) {
       content: clean,
       source: "guidance",
     })
+    inBackground(classifyMessage(userMessageId))
     ws.data.pendingUserMessageId = null
     send(ws, { type: "complete", message_id: messageId, is_ready: isReady })
   } finally {

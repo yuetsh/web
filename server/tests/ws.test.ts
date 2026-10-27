@@ -8,12 +8,18 @@ import { client, freshDb, makeTask, makeUser } from "./helpers"
 
 // 假的模型接口：每段之间停一下，方便测试中途断开
 const PIECES = ["好的", "```html\n<p>hi</p>\n```"]
-// 最近一次发给模型的请求
+// 最近一次发给模型的请求；分类（非流式）单独记，固定回“3”
 let lastRequest: any = null
+let lastClassify: any = null
 const llm = Bun.serve({
   port: 0,
   async fetch(req) {
-    lastRequest = await req.json()
+    const body: any = await req.json()
+    if (!body.stream) {
+      lastClassify = body
+      return Response.json({ choices: [{ message: { content: "3" } }] })
+    }
+    lastRequest = body
     const enc = new TextEncoder()
     const stream = new ReadableStream({
       async start(ctrl) {
@@ -103,6 +109,19 @@ describe("WebSocket 代码生成", () => {
     const streamed = c.msgs.filter((m) => m.type === "stream").map((m) => m.content).join("")
     expect(streamed).toBe(PIECES.join(""))
     expect(all(`SELECT role FROM prompt_message ORDER BY id`).map((m) => m.role)).toEqual(["user", "assistant"])
+    c.ws.close()
+  })
+
+  test("回复完后在后台给提问打层级", async () => {
+    const { task, token } = await setup()
+    const c = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    await c.next("init")
+    c.ws.send(JSON.stringify({ type: "message", content: "做个页面" }))
+    await c.next("complete")
+    const level = () => all(`SELECT prompt_level FROM prompt_message WHERE role = 'user'`)[0]?.prompt_level
+    for (let i = 0; i < 50 && level() == null; i++) await Bun.sleep(20)
+    expect(level()).toBe(3)
+    expect(lastClassify.thinking).toEqual({ type: "disabled" })
     c.ws.close()
   })
 
