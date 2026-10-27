@@ -47,6 +47,9 @@ CREATE INDEX IF NOT EXISTS "prompt_conversation_user_id_ecc418b3" ON "prompt_con
 CREATE TABLE IF NOT EXISTS "prompt_message" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "role" varchar(10) NOT NULL, "content" text NOT NULL, "code_html" text NULL, "code_css" text NULL, "code_js" text NULL, "created" datetime NOT NULL, "conversation_id" char(32) NOT NULL REFERENCES "prompt_conversation" ("id") DEFERRABLE INITIALLY DEFERRED, "prompt_level" integer NULL, "source" varchar(12) NOT NULL, "submission_id" char(32) NULL UNIQUE REFERENCES "submission_submission" ("id") DEFERRABLE INITIALLY DEFERRED);
 CREATE INDEX IF NOT EXISTS "prompt_message_conversation_id_af18dd4b" ON "prompt_message" ("conversation_id");
 CREATE INDEX IF NOT EXISTS "prompt_message_prompt_level_e461b596" ON "prompt_message" ("prompt_level");
+-- 课堂总结统计提示词链用的覆盖索引：只读小列，不碰 content / code_*
+CREATE INDEX IF NOT EXISTS "prompt_message_chain" ON "prompt_message" ("conversation_id", "created", "id", "role", "source", "prompt_level");
+CREATE INDEX IF NOT EXISTS "prompt_message_submission" ON "prompt_message" ("submission_id", "conversation_id", "created", "source") WHERE "submission_id" IS NOT NULL;
 
 -- 登录用 JWT：access token 不落库，refresh token 只存 sha256
 DROP TABLE IF EXISTS "auth_session";

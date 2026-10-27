@@ -199,6 +199,18 @@ export interface TaskStatsOut {
   present_count: number
   classes: string[]
   top_scored: TopScoredItem[]
+  prompts: PromptChainStats
+}
+
+// 课堂总结里每人最新一版的提示词链概况
+export interface PromptChainStats {
+  with_chain: number
+  one_round: number
+  external: number
+  used_guidance: number
+  avg_rounds: number
+  // L1–L6 各有几次提问
+  levels: number[]
 }
 
 export type GradebookTaskType = "tutorial" | "challenge"

@@ -37,32 +37,49 @@
         style="padding: 80px 0"
       />
       <div v-else class="body">
-        <ol class="rounds">
-          <li
-            v-for="(r, i) in rounds"
-            :key="i"
-            :class="['round', { on: i === selected, guide: isGuide(r) }]"
-            @click="isGuide(r) || (selected = i)"
-          >
-            <div class="round-head">
-              <span class="num">{{ nums[i] }}</span>
-              <span :class="['src', `src-${r.source || 'conversation'}`]">
-                {{ sourceLabel(r.source) }}
-              </span>
-              <span v-if="r.prompt_level" class="level">{{ levelLabel(r.prompt_level) }}</span>
-              <span v-if="i === rounds.length - 1" class="final">交的这一版</span>
-              <span v-else-if="isGuide(r)" class="muted no-code">问写提示词的建议，不生成网页</span>
-              <span v-else-if="!r.html" class="muted no-code">没有网页</span>
+        <div class="left">
+          <div v-if="showTrend" class="trend">
+            <span class="muted">层级</span>
+            <div class="bars">
+              <button
+                v-for="b in trend"
+                :key="b.i"
+                :class="['bar', { on: b.i === selected, none: !b.level }]"
+                :style="{ height: `${b.level ? 6 + b.level * 5 : 4}px` }"
+                :title="`第 ${nums[b.i]} 轮${b.level ? ' · ' + levelLabel(b.level) : ''}`"
+                @click="select(b.i)"
+              ></button>
             </div>
-            <div
-              :class="['q', 'markdown-body', { clamp: isLong(r.question) && !expanded.has(i) }]"
-              v-html="renderMarkdown(r.question)"
-            ></div>
-            <button v-if="isLong(r.question)" class="more" @click.stop="toggle(i)">
-              {{ expanded.has(i) ? "收起" : "展开全部" }}
-            </button>
-          </li>
-        </ol>
+          </div>
+          <ol class="rounds">
+            <li
+              v-for="(r, i) in rounds"
+              :key="i"
+              :class="['round', { on: i === selected, guide: isGuide(r) }]"
+              @click="isGuide(r) || (selected = i)"
+            >
+              <div class="round-head">
+                <span class="num">{{ nums[i] }}</span>
+                <span :class="['src', `src-${r.source || 'conversation'}`]">
+                  {{ sourceLabel(r.source) }}
+                </span>
+                <span v-if="r.prompt_level" class="level">{{ levelLabel(r.prompt_level) }}</span>
+                <span v-if="repeats[i]" class="repeat" title="和前面某一轮的提问一字不差">重复提问</span>
+                <span v-if="changes[i]" class="muted">{{ changes[i] }}</span>
+                <span v-if="i === rounds.length - 1" class="final">交的这一版</span>
+                <span v-else-if="isGuide(r)" class="muted no-code">问写提示词的建议，不生成网页</span>
+                <span v-else-if="!r.html" class="muted no-code">没有网页</span>
+              </div>
+              <div
+                :class="['q', 'markdown-body', { clamp: isLong(r.question) && !expanded.has(i) }]"
+                v-html="renderMarkdown(r.question)"
+              ></div>
+              <button v-if="isLong(r.question)" class="more" @click.stop="toggle(i)">
+                {{ expanded.has(i) ? "收起" : "展开全部" }}
+              </button>
+            </li>
+          </ol>
+        </div>
 
         <div class="stage">
           <div class="stage-head">
@@ -119,6 +136,57 @@ const nums = computed(() => {
   return rounds.value.map((r) => (isGuide(r) ? "" : String(++n)))
 })
 
+// 层级走势：每轮 AI 对话 / 外部 AI 一根柱子，两轮以上、有标过层级才显示
+const trend = computed(() =>
+  rounds.value.flatMap((r, i) => (isGuide(r) ? [] : [{ i, level: r.prompt_level }])),
+)
+const showTrend = computed(() => trend.value.length > 1 && trend.value.some((b) => b.level))
+
+// 和前面某一轮一字不差的提问（手改那一轮的正文都一样，不算）
+const repeats = computed(() => {
+  const seen = new Set<string>()
+  return rounds.value.map((r) => {
+    if (isGuide(r) || r.source === "edit") return false
+    const key = r.question.replace(/\s+/g, " ").trim()
+    const dup = seen.has(key)
+    seen.add(key)
+    return dup
+  })
+})
+
+// 这一轮的代码比上一版改了多少行：只按行内容数，不管顺序
+function codeLines(r: PromptRound) {
+  return [r.html, r.css, r.js]
+    .join("\n")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+}
+
+function lineDiff(before: string[], after: string[]) {
+  const left = new Map<string, number>()
+  for (const l of before) left.set(l, (left.get(l) ?? 0) + 1)
+  let added = 0
+  for (const l of after) {
+    const n = left.get(l) ?? 0
+    if (n) left.set(l, n - 1)
+    else added++
+  }
+  const removed = before.length - (after.length - added)
+  return added || removed ? `+${added} −${removed} 行` : "代码没变"
+}
+
+const changes = computed(() => {
+  let prev: string[] | null = null
+  return rounds.value.map((r) => {
+    if (isGuide(r) || !r.html) return ""
+    const cur = codeLines(r)
+    const text = prev ? lineDiff(prev, cur) : ""
+    prev = cur
+    return text
+  })
+})
+
 const doc = computed(() => {
   const r = rounds.value[selected.value]
   if (!r?.html) return ""
@@ -163,6 +231,13 @@ async function load() {
   }
 }
 
+function select(i: number) {
+  selected.value = i
+  nextTick(() =>
+    document.querySelector(".rounds .round.on")?.scrollIntoView({ block: "nearest" }),
+  )
+}
+
 // 在捕获阶段接管按键：弹框开着时，批改页的 Esc / J / K、批改面板的 1–5 / P 都不能触发
 function onKey(e: KeyboardEvent) {
   if (!props.show) return
@@ -176,10 +251,7 @@ function onKey(e: KeyboardEvent) {
   e.preventDefault()
   let i = selected.value + step
   while (rounds.value[i] && isGuide(rounds.value[i]!)) i += step
-  if (rounds.value[i]) selected.value = i
-  nextTick(() =>
-    document.querySelector(".rounds .round.on")?.scrollIntoView({ block: "nearest" }),
-  )
+  if (rounds.value[i]) select(i)
 }
 
 watch(
@@ -233,7 +305,57 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true))
   height: 72vh;
 }
 
+.left {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 0 6px 6px 2px;
+  border-bottom: 1px solid var(--wp-line);
+}
+
+.bars {
+  flex: 1;
+  height: 38px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.bar {
+  flex: 1;
+  max-width: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--wp-faint);
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.bar.none {
+  background: var(--wp-line);
+  opacity: 1;
+}
+
+.bar:hover,
+.bar.on {
+  opacity: 1;
+}
+
+.bar.on {
+  background: var(--wp-brand);
+}
+
 .rounds {
+  flex: 1;
+  min-height: 0;
   margin: 0;
   padding: 0 6px 0 0;
   list-style: none;
@@ -280,6 +402,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true))
 
 .src,
 .level,
+.repeat,
 .final {
   padding: 0 6px;
   border-radius: 4px;
@@ -319,6 +442,11 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true))
 
 .round.guide .q {
   color: var(--wp-muted);
+}
+
+.repeat {
+  color: var(--wp-warn);
+  background: var(--wp-warn-soft);
 }
 
 .level {

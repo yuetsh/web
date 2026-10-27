@@ -130,6 +130,34 @@
             </div>
             <div v-else class="empty">还没有打过分的作品</div>
           </section>
+
+          <!-- 怎么问的 AI -->
+          <section class="span">
+            <h4>
+              怎么问的 AI
+              <span class="count">每人最新一版 · {{ stats.prompts.with_chain }} 份有提示词记录</span>
+            </h4>
+            <div v-if="stats.prompts.with_chain" class="prompt">
+              <div class="facts">
+                <div><b>{{ stats.prompts.avg_rounds }}</b>平均几轮</div>
+                <div><b>{{ pct(stats.prompts.one_round, stats.prompts.with_chain) }}</b>一轮就交</div>
+                <div><b>{{ pct(stats.prompts.external, stats.prompts.with_chain) }}</b>最后一版用外部 AI</div>
+                <div><b>{{ pct(stats.prompts.used_guidance, stats.prompts.with_chain) }}</b>问过怎么写提示词</div>
+              </div>
+              <div class="hist">
+                <template v-for="(n, i) in stats.prompts.levels" :key="i">
+                  <span class="hist-label">{{ levelLabel(i + 1) }}</span>
+                  <span class="hist-bar">
+                    <span :style="{ width: pct(n, maxLevel) }"></span>
+                  </span>
+                  <span class="hist-value">{{ n }}</span>
+                </template>
+              </div>
+            </div>
+            <div v-else class="empty">
+              {{ stats.submitted_count ? "都是直接交的代码，没有提示词记录" : "还没有人交" }}
+            </div>
+          </section>
         </div>
       </div>
     </n-spin>
@@ -150,6 +178,7 @@ import { computed, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import { Icon } from "../../icons"
 import { Submission } from "../../api"
+import { levelLabel } from "../../utils/helper"
 import type { TaskStatsOut, TopScoredItem, UserTag } from "../../utils/type"
 
 // 老师下课前看的这道题的总结：默认看批改页正在看的班
@@ -200,6 +229,7 @@ const buckets = computed(() => {
   ]
 })
 const maxBucket = computed(() => Math.max(...buckets.value.map((b) => b.value)))
+const maxLevel = computed(() => Math.max(0, ...(stats.value?.prompts.levels ?? [])))
 
 const unsubmittedGroups = computed(() => byClass(stats.value?.unsubmitted_users ?? []))
 const unratedGroups = computed(() => byClass(stats.value?.unrated_users ?? []))
@@ -539,5 +569,30 @@ h4 {
 
 .go {
   color: var(--wp-faint);
+}
+
+.span {
+  grid-column: 1 / -1;
+}
+
+.prompt {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  align-content: start;
+  font-size: 12px;
+  color: var(--wp-muted);
+}
+
+.facts b {
+  display: block;
+  font: 600 18px/1.3 var(--wp-font-mono);
+  color: var(--wp-ink);
 }
 </style>

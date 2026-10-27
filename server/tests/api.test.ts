@@ -645,6 +645,39 @@ describe("课堂总结", () => {
     const all = await adm("GET", `/api/submission/stats/${task}`)
     expect(all.json.top_scored.map((t: any) => t.username)).toEqual(["weba2小李", "weba1小明"])
   })
+
+  test("统计每人最新一版的提示词链", async () => {
+    const { createConversation, insertMessage } = await import("../src/services/prompt")
+    makeUser("adm", "admin")
+    const task = makeTask("挑战")
+    const say = (conv: string, source: string, level: number | null, submission_id?: string) => {
+      const id = insertMessage({ conversation_id: conv, role: "user", source, content: "提问" })
+      run(`UPDATE prompt_message SET prompt_level = $level WHERE id = $id`, { level, id })
+      insertMessage({ conversation_id: conv, role: "assistant", source, content: "回答", submission_id })
+    }
+    // 小明：AI 对话 → 引导 → 外部 AI，交最后这版；交了之后的提问不算
+    const a = makeUser("weba1小明", "normal", "a1")
+    const convA = createConversation(a, task)
+    say(convA, "conversation", 3)
+    say(convA, "guidance", 2)
+    say(convA, "manual", 6, makeSubmission(a, task))
+    say(convA, "conversation", 1)
+    // 小红：一轮就交
+    const b = makeUser("weba1小红", "normal", "a1")
+    say(createConversation(b, task), "conversation", 1, makeSubmission(b, task))
+    // 小刚：手动交的，没有提示词
+    makeSubmission(makeUser("weba1小刚", "normal", "a1"), task)
+
+    const res = await (await client("adm"))("GET", `/api/submission/stats/${task}`)
+    expect(res.json.prompts).toEqual({
+      with_chain: 2,
+      one_round: 1,
+      external: 1,
+      used_guidance: 1,
+      avg_rounds: 1.5,
+      levels: [1, 0, 1, 0, 0, 1],
+    })
+  })
 })
 
 describe("提示词分类", () => {

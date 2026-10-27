@@ -1,5 +1,6 @@
 import { all, get, run, now, newUuidHex } from "../db"
 import { Role, type User } from "../auth"
+import { pyRound } from "./pyround"
 
 export interface MessageRow {
   id: number
@@ -140,4 +141,39 @@ export function buildPromptRounds(source: MessageRow) {
     })
   }
   return rounds
+}
+
+// 课堂总结：这些提交各自是怎么问出来的（只走覆盖索引，不读提问和代码）
+export function promptChainStats(submissionIds: string[]) {
+  type Slim = { conversation_id: string; created: string; id: number; role: string; source: string; prompt_level: number | null }
+  const finals = all<Omit<Slim, "role" | "prompt_level">>(
+    `SELECT conversation_id, created, id, source FROM prompt_message
+     WHERE submission_id IN (SELECT value FROM json_each($ids))`,
+    { ids: JSON.stringify(submissionIds) },
+  )
+  const byConv = new Map<string, Slim[]>()
+  const msgs = all<Slim>(
+    `SELECT conversation_id, created, id, role, source, prompt_level FROM prompt_message
+     WHERE conversation_id IN (SELECT value FROM json_each($convs))`,
+    { convs: JSON.stringify([...new Set(finals.map((f) => f.conversation_id))]) },
+  )
+  for (const m of msgs) byConv.set(m.conversation_id, [...(byConv.get(m.conversation_id) ?? []), m])
+
+  const out = { with_chain: finals.length, one_round: 0, external: 0, used_guidance: 0, avg_rounds: 0 }
+  const levels = [0, 0, 0, 0, 0, 0]
+  let rounds = 0
+  for (const f of finals) {
+    // 和 buildPromptRounds 一样：只算交的那一版之前的提问
+    const asked = (byConv.get(f.conversation_id) ?? []).filter(
+      (m) => m.role === "user" && (m.created < f.created || (m.created === f.created && m.id < f.id)),
+    )
+    const code = asked.filter((m) => m.source !== "guidance")
+    rounds += code.length
+    if (code.length === 1) out.one_round++
+    if (f.source === "manual") out.external++
+    if (code.length < asked.length) out.used_guidance++
+    for (const m of code) if (m.prompt_level) levels[m.prompt_level - 1]!++
+  }
+  out.avg_rounds = finals.length ? pyRound(rounds / finals.length, 1) : 0
+  return { ...out, levels }
 }

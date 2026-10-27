@@ -26,6 +26,7 @@ import {
   getActiveConversation,
   getPrecedingUserMessage,
   insertMessage,
+  promptChainStats,
   type MessageRow,
 } from "../services/prompt"
 import { pyRound } from "../services/pyround"
@@ -473,6 +474,8 @@ router.get("/stats/:task_id", (c) => {
     present_count: studentSubs.filter((s) => s.flag === "present").length,
     classes,
     top_scored: topScored,
+    // 每人最新一版是怎么问出来的
+    prompts: promptChainStats([...latest.values()].map((s) => s.id)),
   })
 })
 
