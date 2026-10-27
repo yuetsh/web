@@ -2,9 +2,6 @@
   <n-flex align="center" justify="space-between" class="title">
     <div>
       <slot name="title"><n-text class="titleText">预览</n-text></slot>
-      <n-text v-if="!!submission.id" depth="3">
-        ({{ submission.view_count || 0 }})
-      </n-text>
     </div>
     <n-flex>
       <n-tooltip>
@@ -19,26 +16,6 @@
       </n-tooltip>
       <n-button quaternary @click="download" :disabled="!showDL">下载</n-button>
       <n-button quaternary @click="open">全屏</n-button>
-      <n-button quaternary v-if="props.clearable" @click="clear">清空</n-button>
-      <n-button
-        quaternary
-        v-if="props.showCodeButton"
-        @click="emits('showCode')"
-      >
-        代码
-      </n-button>
-      <n-button quaternary v-if="props.submissionId" @click="copyLink">
-        链接
-      </n-button>
-      <n-flex v-if="!!submission.id" align="center">
-        <n-button quaternary @click="emits('showCode')">代码</n-button>
-        <n-popover v-if="submission.my_score === 0">
-          <template #trigger>
-            <n-button secondary type="primary">打分</n-button>
-          </template>
-          <n-rate :size="30" @update:value="updateScore" />
-        </n-popover>
-      </n-flex>
     </n-flex>
   </n-flex>
   <div class="iframe-wrapper" :style="iframeWrapperStyle">
@@ -54,12 +31,7 @@
 <script lang="ts" setup>
 import { watchDebounced } from "@vueuse/core"
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue"
-import { useRouter } from "vue-router"
-import { Submission } from "../../api"
-import { submission } from "../../store/submission"
-import { useMessage } from "naive-ui"
 import { Icon } from "../../icons"
-import copy from "copy-text-to-clipboard"
 import {
   buildPreviewDocument,
   PREVIEW_SANDBOX,
@@ -75,15 +47,11 @@ interface Props {
   css: string
   js: string
   assetBaseUrl?: string
-  submissionId?: string
-  showCodeButton?: boolean
-  clearable?: boolean
   // 自己的编辑器传当前任务 id：代码里的 localStorage 按“用户 + 任务”存下来，刷新后还在
   storageTaskId?: number
 }
 
 const props = defineProps<Props>()
-const emits = defineEmits(["afterScore", "showCode", "clear"])
 
 type Layout = "desktop" | "mobile" | "tablet"
 const layouts: Layout[] = ["desktop", "mobile", "tablet"]
@@ -120,9 +88,6 @@ const iframeWrapperStyle = computed(() => ({
 function cycleLayout() {
   layoutIndex.value = (layoutIndex.value + 1) % layouts.length
 }
-
-const message = useMessage()
-const router = useRouter()
 
 const showDL = computed(() => props.html || props.css || props.js)
 const previewContent = ref("")
@@ -162,48 +127,21 @@ function download() {
 }
 
 function open() {
-  if (props.submissionId) {
-    const data = router.resolve({
-      name: "submission",
-      params: { id: props.submissionId },
-    })
-    window.open(data.href, "_blank")
-  } else {
-    const newTab = window.open("about:blank", "_blank")
-    if (!newTab) return
-    // 新标签页和本站同源，代码要放进带 sandbox 的 iframe 里跑
-    const doc = newTab.document
-    doc.open()
-    doc.write(
-      `<!DOCTYPE html><title>预览</title><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;display:block}</style><iframe sandbox="${PREVIEW_SANDBOX}"></iframe>`,
-    )
-    doc.close()
-    const tabFrame = doc.querySelector("iframe")!
-    // 全屏页里的写入也存到同一个地方
-    listenPreviewStorage(newTab, () => tabFrame, storageScope)
-    tabFrame.srcdoc = getContent()
-  }
+  const newTab = window.open("about:blank", "_blank")
+  if (!newTab) return
+  // 新标签页和本站同源，代码要放进带 sandbox 的 iframe 里跑
+  const doc = newTab.document
+  doc.open()
+  doc.write(
+    `<!DOCTYPE html><title>预览</title><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;display:block}</style><iframe sandbox="${PREVIEW_SANDBOX}"></iframe>`,
+  )
+  doc.close()
+  const tabFrame = doc.querySelector("iframe")!
+  // 全屏页里的写入也存到同一个地方
+  listenPreviewStorage(newTab, () => tabFrame, storageScope)
+  tabFrame.srcdoc = getContent()
 }
 
-function clear() {
-  emits("clear")
-}
-
-function copyLink() {
-  copy(`${document.location.origin}/submission/${props.submissionId}`)
-  message.success("该提交的链接已复制")
-}
-
-async function updateScore(score: number) {
-  try {
-    const res = await Submission.updateScore(submission.value.id, score)
-    message.success(res.message)
-    submission.value.my_score = score
-    emits("afterScore")
-  } catch (err: any) {
-    message.error(err.response.data.detail)
-  }
-}
 
 watchDebounced(
   () => [props.html, props.css, props.js, props.assetBaseUrl],

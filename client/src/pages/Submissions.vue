@@ -1,335 +1,217 @@
 <template>
-  <n-split
-    class="container"
-    direction="horizontal"
-    :default-size="0.5"
-    :min="0.2"
-    :max="0.8"
-  >
-    <template #1>
-      <n-flex
-        vertical
-        style="height: 100%; padding-right: 10px; overflow: hidden"
-      >
-        <n-flex align="center" justify="end">
-            <n-select
-              v-model:value="query.zone"
-              style="width: 110px"
-              clearable
-              placeholder="得分分区"
-              :options="zoneOptions"
-            />
-            <n-input
-              v-if="isAdmin"
-              style="width: 120px"
-              v-model:value="query.username"
-              placeholder="搜索学生"
-              clearable
-            />
-            <n-pagination
-              v-model:page="query.page"
-              :page-size="10"
-              :item-count="count"
-              simple
-            />
-            <n-button
-              secondary
-              style="padding: 0 10px"
-              title="刷新"
-              @click="init"
-            >
-              <Icon :width="16" icon="lucide:refresh-cw" />
+  <div class="subs">
+    <main class="list">
+      <div class="toolbar">
+        <n-input
+          v-model:value="query.username"
+          size="small"
+          clearable
+          placeholder="搜索学生"
+          style="width: 150px"
+        >
+          <template #prefix><Icon icon="lucide:search" :width="14" /></template>
+        </n-input>
+        <n-radio-group v-model:value="query.task_type" size="small">
+          <n-radio-button value="">全部</n-radio-button>
+          <n-radio-button value="tutorial">教程</n-radio-button>
+          <n-radio-button value="challenge">挑战</n-radio-button>
+        </n-radio-group>
+        <n-select
+          v-model:value="query.zone"
+          size="small"
+          clearable
+          placeholder="得分分区"
+          :options="zoneOptions"
+          style="width: 110px"
+        />
+        <n-select
+          v-model:value="query.ordering"
+          size="small"
+          :options="orderOptions"
+          style="width: 130px"
+        />
+        <n-checkbox v-model:checked="query.grouped" size="small">每人每题只看最新一次</n-checkbox>
+        <span class="spacer"></span>
+        <span class="muted">共 {{ count }} 条</span>
+        <n-tooltip>
+          <template #trigger>
+            <n-button size="small" quaternary :loading="loading" @click="load">
+              <template #icon><Icon icon="lucide:refresh-cw" /></template>
             </n-button>
-        </n-flex>
-        <n-data-table
-          flex-height
-          striped
-          :columns="columns"
-          :data="data"
-          :row-key="(row: SubmissionOut) => row.id"
-          :expanded-row-keys="expandedKeys"
-          @update:expanded-row-keys="handleExpand"
-          :row-props="rowProps"
-          :row-class-name="rowClassName"
-          style="flex: 1; min-height: 0"
+          </template>
+          刷新
+        </n-tooltip>
+      </div>
+
+      <n-data-table
+        class="table"
+        size="small"
+        flex-height
+        :loading="loading"
+        :columns="columns"
+        :data="data"
+        :row-key="(row: SubmissionOut) => row.id"
+        :row-props="rowProps"
+        :row-class-name="(row: SubmissionOut) => (row.id === selectedId ? 'row-active' : '')"
+      />
+
+      <n-flex justify="end">
+        <n-pagination
+          v-model:page="query.page"
+          :page-size="PAGE_SIZE"
+          :item-count="count"
+          size="small"
         />
       </n-flex>
-    </template>
-    <template #2>
-      <div style="height: 100%; padding-left: 10px">
-        <Preview
-          v-if="submission.id"
-          :html="html"
-          :css="css"
-          :js="js"
-          :submission-id="submission.id"
-          @after-score="afterScore"
-          @show-code="codeModal = true"
-        />
-      </div>
-    </template>
-  </n-split>
+    </main>
 
-  <CodeModal
-    v-model:show="codeModal"
-    :html="html"
-    :css="css"
-    :js="js"
-    @copy-to-editor="copyToEditor"
-  />
-
-  <ChainModal
-    v-model:show="chainModal"
-    :submission-id="chainSubmissionId"
-    :username="chainUsername"
-  />
+    <aside v-if="selectedId" class="detail">
+      <ReviewPanel
+        :submission-id="selectedId"
+        can-delete
+        @close="selectedId = null"
+        @changed="applyPatch"
+        @deleted="onDeleted"
+      />
+    </aside>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from "vue"
-import { NButton, NDataTable, NTag, useMessage, type DataTableColumn } from "naive-ui"
+import { h, onMounted, reactive, ref, watch } from "vue"
+import { useRoute, useRouter } from "vue-router"
+import { watchDebounced } from "@vueuse/core"
+import type { DataTableColumn } from "naive-ui"
 import { Icon } from "../icons"
 import { Submission } from "../api"
-import type { SubmissionOut } from "../utils/type"
-import { parseTime } from "../utils/helper"
-import { goHome } from "../utils/helper"
-import { saveTaskCode } from "../composables/useTaskCode"
+import ReviewPanel from "../components/review/ReviewPanel.vue"
 import { TASK_TYPE } from "../utils/const"
-import { watchDebounced } from "@vueuse/core"
-import { useRouter, useRoute } from "vue-router"
+import { parseTime } from "../utils/helper"
+import type { FlagType, SubmissionOut } from "../utils/type"
 
-import Preview from "../components/editor/Preview.vue"
-import TaskTitle from "../components/submissions/TaskTitle.vue"
-import CodeModal from "../components/submissions/CodeModal.vue"
-import ChainModal from "../components/submissions/ChainModal.vue"
-import ExpandedSubTable from "../components/submissions/ExpandedSubTable.vue"
-
-import { submission } from "../store/submission"
-import { roleAdmin, roleSuper } from "../store/user"
+// 全站提交列表，留给超管查某个学生、处理有问题的提交；平时批改用“批改”页
+const PAGE_SIZE = 20
 
 const route = useRoute()
 const router = useRouter()
-const message = useMessage()
 
-// 列表数据
 const data = ref<SubmissionOut[]>([])
 const count = ref(0)
+const loading = ref(false)
+const selectedId = ref<string | null>(null)
+
 const query = reactive({
-  page: Number(route.params.page),
-  username: (Array.isArray(route.query.username)
-    ? ""
-    : (route.query.username ?? "")) as string,
+  page: Number(route.params.page) || 1,
+  username: typeof route.query.username === "string" ? route.query.username : "",
+  task_type: "" as "" | "tutorial" | "challenge",
   zone: null as string | null,
+  ordering: "-created",
+  grouped: true,
 })
 
-// 当前选中提交的代码
-const html = computed(() => submission.value.html)
-const css = computed(() => submission.value.css)
-const js = computed(() => submission.value.js)
-
-// Modal 状态
-const codeModal = ref(false)
-const chainModal = ref(false)
-const chainSubmissionId = ref<string>("")
-const chainUsername = ref<string>("")
-
-// 展开行
-const expandedKeys = ref<string[]>([])
-const expandedData = reactive(new Map<string, SubmissionOut[]>())
-const expandedLoading = reactive(new Set<string>())
-
-// 管理员判断
-const isAdmin = computed(() => roleAdmin.value || roleSuper.value)
-
 // 得分分区（按得分高低和评分人数分的三档，见 server/src/services/score.ts）
-const zoneOptions = [
-  { label: "优秀", value: "featured" },
-  { label: "待定", value: "pending" },
-  { label: "待提高", value: "low" },
+const ZONES: Record<string, string> = { featured: "优秀", pending: "待定", low: "待提高" }
+const zoneOptions = Object.entries(ZONES).map(([value, label]) => ({ label, value }))
+const orderOptions = [
+  { label: "最新的在前", value: "-created" },
+  { label: "得分从高到低", value: "-score" },
+  { label: "得分从低到高", value: "score" },
 ]
 
-function showChain(submissionId: string, username: string) {
-  chainSubmissionId.value = submissionId
-  chainUsername.value = username
-  chainModal.value = true
-}
-
-// 表格列定义
 const columns: DataTableColumn<SubmissionOut>[] = [
-  {
-    type: "expand",
-    expandable: () => true,
-    renderExpand: (row) =>
-      h(ExpandedSubTable, {
-        row,
-        items: expandedData.get(row.id),
-        loading: expandedLoading.has(row.id),
-        onSelect: (id) => getSubmissionByID(id),
-        onDelete: (r, parentId) => handleDelete(r, parentId),
-        "onShow-chain": (submissionId, username) =>
-          showChain(submissionId, username),
-      }),
-  },
-  {
-    title: "分区",
-    key: "zone",
-    width: 64,
-    render: (row) => {
-      const map: Record<
-        string,
-        { label: string; type: "success" | "default" | "warning" }
-      > = {
-        featured: { label: "优秀", type: "success" },
-        pending: { label: "待定", type: "default" },
-        low: { label: "待提高", type: "warning" },
-      }
-      if (!row.zone || !map[row.zone]) return null
-      const { label, type } = map[row.zone]
-      return h(NTag, { size: "small", round: true, type }, () => label)
-    },
-  },
   {
     title: "时间",
     key: "created",
-    width: 110,
-    render: (row) => parseTime(row.created, "YYYY-MM-DD HH:mm:ss"),
+    width: 100,
+    render: (row) => h("span", { class: "mono muted" }, parseTime(row.created, "MM-DD HH:mm")),
   },
-  {
-    title: "提交者",
-    key: "user",
-    width: 80,
-    render: (row) => row.username,
-  },
+  { title: "学生", key: "username", width: 120, ellipsis: { tooltip: true } },
   {
     title: "任务",
     key: "task_title",
-    render: (row) => h(TaskTitle, { submission: row }),
+    ellipsis: { tooltip: true },
+    render: (row) => [
+      h("span", { class: "muted" }, row.task_type === TASK_TYPE.Tutorial ? "教程 " : "挑战 "),
+      `${row.task_display}. ${row.task_title}`,
+    ],
   },
   {
     title: "得分",
     key: "score",
     width: 70,
-    render: (row) => {
-      const myScore = row.my_score > 0 ? String(row.my_score) : "-"
-      const avgScore = row.score > 0 ? row.score.toFixed(2) : "-"
-      return h(
-        "div",
-        { style: { display: "flex", gap: "6px", alignItems: "baseline" } },
-        [
-          h("span", avgScore),
-          h("span", { style: { fontSize: "11px", color: "var(--wp-faint)" } }, myScore),
-        ],
-      )
-    },
+    align: "right",
+    render: (row) =>
+      row.score > 0
+        ? h("span", { class: "mono" }, row.score.toFixed(2))
+        : h("span", { class: "muted" }, "未评"),
   },
   {
-    title: "次数",
+    title: "分区",
+    key: "zone",
+    width: 70,
+    render: (row) => (row.zone ? h("span", { class: `zone z-${row.zone}` }, ZONES[row.zone]) : null),
+  },
+  {
+    title: "共交",
     key: "submit_count",
     width: 60,
-    render: (row) => row.submit_count || "-",
-  },
-  {
-    title: "浏览",
-    key: "view_count",
-    width: 60,
-    render: (row) => row.view_count || "-",
+    align: "right",
+    render: (row) => h("span", { class: "mono muted" }, `${row.submit_count} 次`),
   },
 ]
-
-async function handleExpand(keys: (string | number)[]) {
-  const strKeys = keys.map(String)
-  const newKey = strKeys.find((k) => !expandedKeys.value.includes(k))
-  expandedKeys.value = strKeys
-  if (newKey) {
-    const row = data.value.find((d) => d.id === newKey)
-    if (row && !expandedData.has(newKey)) {
-      expandedLoading.add(newKey)
-      try {
-        const items = await Submission.listByUserTask(row.userid, row.task_id)
-        expandedData.set(newKey, items)
-      } finally {
-        expandedLoading.delete(newKey)
-      }
-    }
-  }
-}
-
-async function handleDelete(row: SubmissionOut, parentId: string) {
-  try {
-    await Submission.delete(row.id)
-  } catch (error: any) {
-    message.error(error.response?.data?.detail ?? "删除失败，请重试")
-    return
-  }
-  const items = expandedData.get(parentId)
-  if (items)
-    expandedData.set(
-      parentId,
-      items.filter((d) => d.id !== row.id),
-    )
-  if (submission.value.id === row.id) submission.value.id = ""
-  const res = await Submission.list(query)
-  data.value = res.items
-  count.value = res.count
-}
 
 function rowProps(row: SubmissionOut) {
   return {
     style: { cursor: "pointer" },
-    onClick: () => {
-      getSubmissionByID(row.id)
-      handleExpand(
-        expandedKeys.value.includes(row.id)
-          ? expandedKeys.value.filter((k) => k !== row.id)
-          : [...expandedKeys.value, row.id],
-      )
-    },
+    onClick: () => (selectedId.value = row.id),
   }
 }
 
-function rowClassName(row: SubmissionOut) {
-  return submission.value.id === row.id ? "row-active" : ""
-}
-
 // 快速翻页时只用最后一次请求的结果
-let initSeq = 0
+let seq = 0
 
-async function init() {
-  const seq = ++initSeq
-  expandedKeys.value = []
-  expandedData.clear()
-  const res = await Submission.list(query)
-  if (seq !== initSeq) return
-  data.value = res.items
-  count.value = res.count
+async function load() {
+  const s = ++seq
+  loading.value = true
+  try {
+    const res = await Submission.list({
+      page: query.page,
+      page_size: PAGE_SIZE,
+      username: query.username || undefined,
+      task_type: query.task_type || undefined,
+      zone: query.zone,
+      ordering: query.ordering,
+      grouped: query.grouped,
+    })
+    if (s !== seq) return
+    data.value = res.items
+    count.value = res.count
+  } finally {
+    if (s === seq) loading.value = false
+  }
 }
 
-let detailSeq = 0
-
-async function getSubmissionByID(id: string) {
-  const seq = ++detailSeq
-  const res = await Submission.get(id)
-  if (seq === detailSeq) submission.value = res
+function applyPatch(patch: { id: string; my_score?: number; score?: number; flag?: FlagType }) {
+  const row = data.value.find((d) => d.id === patch.id)
+  if (row) Object.assign(row, patch)
 }
 
-function afterScore() {
-  data.value = data.value.map((d) => {
-    if (d.id === submission.value.id) d.my_score = submission.value.my_score
-    return d
-  })
+function onDeleted() {
+  selectedId.value = null
+  load()
 }
 
-function copyToEditor() {
-  // 教程和挑战的代码都按任务各存一份，打开那个任务时读到
-  saveTaskCode(submission.value.task_id, { html: html.value, css: css.value, js: js.value })
-  goHome(router, submission.value.task_type, submission.value.task_display)
+// 换了筛选条件就回到第一页
+function reset() {
+  if (query.page !== 1) query.page = 1
+  else load()
 }
 
 watch(
   () => query.page,
-  (v) => {
-    init()
-    router.push({ params: { page: v } })
+  (page) => {
+    load()
+    router.push({ params: { page } })
   },
 )
 // 浏览器前进 / 后退时，页码跟着地址栏走
@@ -340,53 +222,78 @@ watch(
     if (page !== query.page) query.page = page
   },
 )
-watchDebounced(
-  () => query.username,
-  () => {
-    if (query.page !== 1) query.page = 1
-    else init()
-  },
-  { debounce: 500, maxWait: 1000 },
-)
-watch(
-  () => query.zone,
-  () => {
-    if (query.page !== 1) query.page = 1
-    else init()
-  },
-)
+watch(() => [query.task_type, query.zone, query.ordering, query.grouped], reset)
+watchDebounced(() => query.username, reset, { debounce: 500, maxWait: 1000 })
 
-onMounted(init)
-onUnmounted(() => {
-  submission.value = {
-    id: "",
-    userid: 0,
-    username: "",
-    task_id: 0,
-    task_display: 0,
-    task_title: "",
-    task_type: TASK_TYPE.Tutorial,
-    score: 0,
-    my_score: 0,
-    html: "",
-    css: "",
-    js: "",
-    submit_count: 0,
-    view_count: 0,
-    created: new Date(),
-    modified: new Date(),
-  }
-})
+onMounted(load)
 </script>
 
 <style scoped>
-.container {
-  padding: 10px;
-  box-sizing: border-box;
-  width: 100%;
+.subs {
+  height: 100%;
+  display: flex;
+  min-width: 0;
 }
 
-:deep(.row-active td) {
-  background-color: var(--wp-brand-soft) !important;
+.list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.table {
+  flex: 1;
+  min-height: 0;
+}
+
+.table :deep(.row-active td) {
+  background: var(--wp-brand-soft) !important;
+}
+
+.table :deep(.mono) {
+  font-family: var(--wp-font-mono);
+}
+
+.muted,
+.table :deep(.muted) {
+  font-size: 12px;
+  color: var(--wp-muted);
+}
+
+.table :deep(.zone) {
+  font-size: 12px;
+}
+
+.table :deep(.z-featured) {
+  color: var(--wp-brand);
+}
+
+.table :deep(.z-low) {
+  color: var(--wp-warn);
+}
+
+.table :deep(.z-pending) {
+  color: var(--wp-muted);
+}
+
+.detail {
+  width: 440px;
+  flex: none;
+  border-left: 1px solid var(--wp-line);
+  min-height: 0;
 }
 </style>

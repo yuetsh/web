@@ -44,9 +44,10 @@ const routes: RouteRecordRaw[] = [
     meta: { auth: true },
   },
   {
-    path: "/submissions/:page",
+    // 学生（和老师自己）的“我的提交”；:page 是旧链接留下的，不用了
+    path: "/submissions/:page?",
     name: "submissions",
-    component: () => import("./pages/Submissions.vue"),
+    component: () => import("./pages/MySubmissions.vue"),
     meta: { auth: true },
   },
   {
@@ -116,7 +117,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import("./pages/Review.vue"),
       },
       {
-        // 和顶层的 /submissions 是同一个页面，放在教学侧栏里打开，侧栏不会消失
+        // 全站提交列表（超管），和学生的“我的提交”是两个页面
         path: "submissions/:page",
         name: "teach-submissions",
         component: () => import("./pages/Submissions.vue"),

@@ -121,11 +121,7 @@ const userMenu = [
 
 async function clickUserMenu(key: string) {
   if (key === "submissions") {
-    router.push({
-      name: "submissions",
-      params: { page: 1 },
-      query: { username: user.username },
-    })
+    router.push({ name: "submissions" })
   } else if (key === "logout") {
     await logout()
     // 留在需要登录或特定角色的页面上没有意义

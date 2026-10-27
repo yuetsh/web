@@ -111,6 +111,12 @@
             </n-dropdown>
           </n-flex>
           <div class="muted hint">P 键：加入 / 取消课上展示</div>
+          <n-popconfirm v-if="canDelete" @positive-click="remove">
+            <template #trigger>
+              <n-button size="small" quaternary type="error" class="delete">删除这一版</n-button>
+            </template>
+            删除后找不回来，评分和作品展里的这一版也会一起删掉；它对应的那轮 AI 对话也会删掉。
+          </n-popconfirm>
         </section>
 
         <section>
@@ -155,6 +161,8 @@ const props = defineProps<{
   canWiden?: boolean
   // 作品墙里用：能不能切到上一个 / 下一个学生
   nav?: { prev: boolean; next: boolean }
+  // 全部提交页（超管）：能删除这一版
+  canDelete?: boolean
 }>()
 const emit = defineEmits<{
   prev: []
@@ -163,6 +171,7 @@ const emit = defineEmits<{
   "toggle-wide": []
   // 让作品墙同步更新这张卡片
   changed: [patch: { id: string; my_score?: number; score?: number; flag?: FlagType }]
+  deleted: [id: string]
 }>()
 
 const message = useMessage()
@@ -253,6 +262,19 @@ async function addToAward(awardId: number) {
   } catch (err: any) {
     message.error(err.response?.data?.detail ?? "加入失败")
   }
+}
+
+async function remove() {
+  if (!sub.value) return
+  const id = sub.value.id
+  try {
+    await Submission.delete(id)
+  } catch (err: any) {
+    message.error(err.response?.data?.detail ?? "删除失败")
+    return
+  }
+  message.success("已删除")
+  emit("deleted", id)
 }
 
 function openFull() {
@@ -395,6 +417,10 @@ section {
 h4 {
   margin: 0 0 8px;
   font-size: 13px;
+}
+
+.delete {
+  margin-top: 8px;
 }
 
 .rates {
