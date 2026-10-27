@@ -27,12 +27,12 @@ export function sourceLabel(source: string | null | undefined) {
 
 // 提问的 Bloom 等级（services/classifier.ts 后台打的标签）
 export const PROMPT_LEVELS: Record<number, { name: string; desc: string }> = {
-  1: { name: "记忆", desc: "只说要做什么，没有自己的要求" },
-  2: { name: "理解", desc: "说出看到的现象或疑问" },
+  1: { name: "记忆", desc: "只说要做什么或只报结果，没有自己的要求和解释" },
+  2: { name: "理解", desc: "想弄懂原理：问为什么、是什么意思、怎么做到的" },
   3: { name: "应用", desc: "提出具体要求（颜色、布局、功能），照搬题目要求也算" },
-  4: { name: "分析", desc: "说清在什么操作下出了什么问题，或推测原因" },
-  5: { name: "评价", desc: "按标准判断好坏并说明理由，或比较不同做法" },
-  6: { name: "创造", desc: "题目之外自己的设计：主题、玩法、交互" },
+  4: { name: "分析", desc: "说清在什么操作、哪个位置出了什么问题，或推测原因" },
+  5: { name: "评价", desc: "带理由评判现有结果，或比较不同做法再选择" },
+  6: { name: "创造", desc: "题目之外自己构思的整体设计：主题、玩法、交互" },
 }
 
 export function levelLabel(level: number | null | undefined) {
