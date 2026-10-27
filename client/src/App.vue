@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { dateZhCN, zhCN } from "naive-ui"
+import { darkTheme, dateZhCN, zhCN } from "naive-ui"
 import Login from "./components/Login.vue"
 import AppShell from "./components/layout/AppShell.vue"
-import { onMounted } from "vue"
+import { computed, onMounted } from "vue"
 import { useRoute } from "vue-router"
 import { loadUser } from "./store/session"
-import { light, naiveOverrides } from "./theme"
+import { dark, light, naiveOverrides } from "./theme"
+import { isDark } from "./store/theme"
 import hljs from "highlight.js/lib/core"
 
 const route = useRoute()
-const themeOverrides = naiveOverrides(light)
+const theme = computed(() => (isDark.value ? darkTheme : null))
+const themeOverrides = computed(() => naiveOverrides(isDark.value ? dark : light))
 
 onMounted(loadUser)
 </script>
@@ -20,6 +22,7 @@ onMounted(loadUser)
     :locale="zhCN"
     :date-locale="dateZhCN"
     :hljs="hljs"
+    :theme="theme"
     :theme-overrides="themeOverrides"
   >
     <n-modal-provider>

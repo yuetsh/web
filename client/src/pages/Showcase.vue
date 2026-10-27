@@ -53,20 +53,20 @@
                 <n-flex align="center" :wrap="false" :size="8" style="flex-shrink: 0;">
                   <n-flex align="center" :size="3">
                     <Icon icon="lucide:star" :width="13" />
-                    <n-text style="font-size: 12px; color: #666;">
+                    <n-text style="font-size: 12px; color: var(--wp-muted);">
                       {{ item.score.toFixed(1) }}
                     </n-text>
                   </n-flex>
                   <n-flex align="center" :size="3">
                     <Icon icon="lucide:eye" :width="13" />
-                    <n-text style="font-size: 12px; color: #666;">
+                    <n-text style="font-size: 12px; color: var(--wp-muted);">
                       {{ item.view_count }}
                     </n-text>
                   </n-flex>
                 </n-flex>
               </n-flex>
               <n-ellipsis
-                style="display: block; margin-top: 4px; font-size: 12px; line-height: 1.4; color: #888;"
+                style="display: block; margin-top: 4px; font-size: 12px; line-height: 1.4; color: var(--wp-muted);"
               >
                 {{ item.task_title }}
               </n-ellipsis>
@@ -142,7 +142,7 @@ onMounted(init)
   position: relative;
   height: 160px;
   overflow: hidden;
-  background: #f7f8fa;
+  background: var(--wp-paper);
 }
 
 .preview-iframe {
@@ -162,6 +162,6 @@ onMounted(init)
 .card-info {
   min-height: 72px;
   padding: 10px 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--wp-line);
 }
 </style>

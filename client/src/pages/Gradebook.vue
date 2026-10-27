@@ -397,7 +397,7 @@ onMounted(async () => {
 }
 
 .task-header.muted {
-  color: #888;
+  color: var(--wp-muted);
 }
 
 .task-title {
@@ -414,21 +414,21 @@ onMounted(async () => {
   justify-content: center;
   gap: 4px;
   margin-top: 2px;
-  color: #999;
+  color: var(--wp-faint);
   font-size: 11px;
 }
 
 .missing-cell {
-  color: #d03050;
+  color: var(--wp-bad);
   font-size: 12px;
 }
 
 .score-link.muted {
-  color: #777;
+  color: var(--wp-muted);
 }
 
 :deep(.excluded-task-column) {
-  background: #fafafa;
+  background: var(--wp-paper);
 }
 
 @media (max-width: 720px) {

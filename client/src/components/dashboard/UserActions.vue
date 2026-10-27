@@ -28,7 +28,7 @@
 </template>
 <script lang="ts" setup>
 import { ref } from "vue"
-import { useMessage } from "naive-ui"
+import { useDialog, useMessage } from "naive-ui"
 import { Account } from "../../api"
 import { Role, type User } from "../../utils/type"
 import UserFormModal from "./UserFormModal.vue"
@@ -41,15 +41,27 @@ const props = defineProps<Props>()
 const emits = defineEmits(["reload"])
 
 const message = useMessage()
+const dialog = useDialog()
 const showEdit = ref(false)
 
 function edit() {
   showEdit.value = true
 }
 
-async function toggleUserActive() {
+async function doToggle() {
   const data = await Account.toggleActive(props.user.id)
   message.success(data.message)
   emits("reload")
+}
+
+function toggleUserActive() {
+  if (!props.user.is_active) return doToggle()
+  dialog.warning({
+    title: `封禁「${props.user.username}」？`,
+    content: "封禁后这个账号不能登录，已经登录的也会被退出。之后可以再解封。",
+    positiveText: "封禁",
+    negativeText: "取消",
+    onPositiveClick: doToggle,
+  })
 }
 </script>

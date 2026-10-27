@@ -274,8 +274,9 @@ challenge.post("/", async (c) => {
   return c.json({ message: "创建成功" })
 })
 
+// 管理员保存挑战时本来就能设“公开”，这里和它保持一致
 challenge.put("/public/:display", (c) => {
-  requireSuper(c)
+  requireAdmin(c)
   const found = orNotFound(findChallenge(intParam(c, "display")))
   return c.json(togglePublic(found.id))
 })

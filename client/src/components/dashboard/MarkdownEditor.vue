@@ -1,5 +1,10 @@
 <template>
-  <MdEditor v-bind="props" v-model="modelValue" @upload-img="uploadImg" />
+  <MdEditor
+    v-bind="props"
+    v-model="modelValue"
+    :theme="isDark ? 'dark' : 'light'"
+    @upload-img="uploadImg"
+  />
 </template>
 <script lang="ts" setup>
 import { MdEditor } from "md-editor-v3"
@@ -7,6 +12,7 @@ import { MdEditor } from "md-editor-v3"
 import "md-editor-v3/lib/style.css"
 import { Helper } from "../../api"
 import { useMessage } from "naive-ui"
+import { isDark } from "../../store/theme"
 
 const message = useMessage()
 

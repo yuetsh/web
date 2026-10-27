@@ -274,11 +274,11 @@ watch([() => messages.value.length, streamingContent], () => {
   font-size: 12px;
   font-weight: bold;
   margin-bottom: 4px;
-  color: #666;
+  color: var(--wp-muted);
 }
 
 .message.user .message-role {
-  color: #2080f0;
+  color: var(--wp-css);
 }
 
 .message.assistant .message-role {
@@ -321,7 +321,7 @@ watch([() => messages.value.length, streamingContent], () => {
 }
 
 .message-content :deep(pre) {
-  background: #f5f5f5;
+  background: var(--wp-paper);
   padding: 8px 12px;
   border-radius: 4px;
   overflow-x: auto;
@@ -379,7 +379,7 @@ watch([() => messages.value.length, streamingContent], () => {
 
 .streaming-hint {
   font-size: 11px;
-  color: #aaa;
+  color: var(--wp-faint);
   margin-top: 4px;
   animation: pulse 1.5s ease-in-out infinite;
 }
@@ -387,7 +387,7 @@ watch([() => messages.value.length, streamingContent], () => {
 .input-area {
   flex-shrink: 0;
   padding: 12px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--wp-line);
 }
 
 .message-pair {
@@ -405,11 +405,11 @@ watch([() => messages.value.length, streamingContent], () => {
   top: 0;
   right: 0;
   background: none;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--wp-line);
   border-radius: 4px;
   padding: 3px 6px;
   cursor: pointer;
-  color: #bbb;
+  color: var(--wp-faint);
   line-height: 1;
   transition:
     color 0.15s,
@@ -417,8 +417,8 @@ watch([() => messages.value.length, streamingContent], () => {
 }
 
 .pair-delete-btn:hover {
-  color: #e03e3e;
-  border-color: #e03e3e;
+  color: var(--wp-bad);
+  border-color: var(--wp-bad);
 }
 
 .message-pair.has-delete:hover .pair-delete-btn {

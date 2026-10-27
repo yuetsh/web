@@ -16,6 +16,14 @@
         </router-link>
       </nav>
       <div class="spacer"></div>
+      <n-tooltip>
+        <template #trigger>
+          <n-button quaternary circle size="small" @click="cycleTheme">
+            <Icon :icon="themeIcon" :width="16" />
+          </n-button>
+        </template>
+        外观：{{ themeLabel }}（点击切换）
+      </n-tooltip>
       <template v-if="user.loaded">
         <router-link
           v-if="roleStaff"
@@ -55,6 +63,19 @@ import { authed, roleStaff, user } from "../../store/user"
 import { loginModal } from "../../store/modal"
 import { step } from "../../store/tutorial"
 import { logout } from "../../store/session"
+import { themeMode, type ThemeMode } from "../../store/theme"
+import { Icon } from "../../icons"
+
+const themeOrder: ThemeMode[] = ["auto", "light", "dark"]
+const themeLabel = computed(
+  () => ({ auto: "跟随系统", light: "亮色", dark: "暗色" })[themeMode.value],
+)
+const themeIcon = computed(
+  () => ({ auto: "lucide:sun-moon", light: "lucide:sun", dark: "lucide:moon" })[themeMode.value],
+)
+function cycleTheme() {
+  themeMode.value = themeOrder[(themeOrder.indexOf(themeMode.value) + 1) % themeOrder.length]!
+}
 
 const route = useRoute()
 const router = useRouter()

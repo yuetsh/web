@@ -4,7 +4,7 @@
       :width="260"
       bordered
       content-style="overflow: auto; height: 100%;"
-      style="background: #fafafa;"
+      style="background: var(--wp-paper);"
     >
       <n-flex class="panel-header" justify="space-between" align="center">
         <n-text strong>奖项</n-text>
@@ -35,7 +35,7 @@
           <n-ellipsis style="flex: 1; min-width: 0; font-size: 14px; font-weight: 500;">
             {{ award.name }}
           </n-ellipsis>
-          <n-flex align="center" :size="6" style="flex-shrink: 0; color: #777; font-size: 12px;">
+          <n-flex align="center" :size="6" style="flex-shrink: 0; color: var(--wp-muted); font-size: 12px;">
             <n-tag v-if="!award.is_active" size="small">停用</n-tag>
             <span>{{ award.item_count }} 件</span>
           </n-flex>
@@ -615,8 +615,8 @@ onMounted(async () => {
   top: 0;
   z-index: 1;
   padding: 12px;
-  border-bottom: 1px solid #efeff5;
-  background: #fafafa;
+  border-bottom: 1px solid var(--wp-line);
+  background: var(--wp-paper);
 }
 
 .award-row {
@@ -628,15 +628,15 @@ onMounted(async () => {
   gap: 10px;
   padding: 8px 12px;
   border: 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--wp-line);
   background: transparent;
-  color: #333;
+  color: var(--wp-ink);
   cursor: pointer;
   text-align: left;
 }
 
 .award-row:hover {
-  background: #f2f5f8;
+  background: var(--wp-paper);
 }
 
 .award-row.active {

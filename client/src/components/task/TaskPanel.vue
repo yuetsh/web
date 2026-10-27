@@ -2,9 +2,7 @@
   <div class="container">
     <n-flex align="center" justify="space-between" class="title" :wrap="false">
       <n-flex align="center" :wrap="false">
-        <span class="panel-name">
-          {{ taskTab === TASK_TYPE.Tutorial ? "教程" : "挑战" }}
-        </span>
+        <span class="panel-name">教程</span>
         <template v-if="!hideNav">
           <n-tooltip>
             <template #trigger>
@@ -59,8 +57,7 @@
         </n-tooltip>
       </n-flex>
     </n-flex>
-    <TutorialContent v-if="taskTab === TASK_TYPE.Tutorial" />
-    <ChallengeList v-else />
+    <TutorialContent />
   </div>
   <PeersDrawer
     v-model:show="showPeers"
@@ -109,7 +106,6 @@ import { useRoute, useRouter } from "vue-router"
 import { TASK_TYPE } from "../../utils/const"
 import { TaskAssets } from "../../api"
 import type { TaskAsset } from "../../utils/type"
-import ChallengeList from "./ChallengeList.vue"
 import TutorialContent from "./TutorialContent.vue"
 
 const tutorialAssets = ref<TaskAsset[]>([])
@@ -134,16 +130,11 @@ const route = useRoute()
 const router = useRouter()
 
 // 路由同步：初始执行 + watch 响应 SPA 内部导航
+// 这个面板只用在教程页（挑战有自己的页面）
 function syncRoute(routeName: string) {
-  if (routeName.startsWith("home-tutorial")) {
-    taskTab.value = TASK_TYPE.Tutorial
-    if (route.params.display) step.value = Number(route.params.display)
-  } else if (routeName.startsWith("home-challenge")) {
-    taskTab.value = TASK_TYPE.Challenge
-    if (route.params.display)
-      challengeDisplay.value = Number(route.params.display)
-    // 挑战列表里没有选中的任务，“提交”不可用
-    else taskId.value = 0
+  taskTab.value = TASK_TYPE.Tutorial
+  if (routeName.startsWith("home-tutorial") && route.params.display) {
+    step.value = Number(route.params.display)
   }
 }
 syncRoute(route.name as string)
@@ -155,9 +146,7 @@ watch(
 
 defineEmits(["hide"])
 
-const hideNav = computed(
-  () => taskTab.value !== TASK_TYPE.Tutorial || tutorialIds.value.length <= 1,
-)
+const hideNav = computed(() => tutorialIds.value.length <= 1)
 
 const progressText = computed(() => {
   const ids = tutorialIds.value

@@ -443,7 +443,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey))
   height: 100px;
   position: relative;
   overflow: hidden;
-  background: #fff;
+  background: var(--wp-surface);
   display: grid;
   place-items: center;
   color: var(--wp-faint);

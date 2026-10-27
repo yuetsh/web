@@ -135,7 +135,7 @@ async function rate(w: PeerWork, score: number) {
   border: 0;
   border-bottom: 1px solid var(--wp-line);
   overflow: hidden;
-  background: #fff;
+  background: var(--wp-surface);
   cursor: zoom-in;
 }
 

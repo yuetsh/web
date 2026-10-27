@@ -127,6 +127,8 @@ export interface User {
   role: Role
   classname: string
   is_active: boolean
+  // 批量创建时生成的初始密码；超管和改过密码的为空
+  raw_password?: string | null
 }
 
 export interface SubmissionOut {

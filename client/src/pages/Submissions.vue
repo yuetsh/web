@@ -105,7 +105,6 @@ import ChainModal from "../components/submissions/ChainModal.vue"
 import ExpandedSubTable from "../components/submissions/ExpandedSubTable.vue"
 
 import { submission } from "../store/submission"
-import { html as eHtml, css as eCss, js as eJs } from "../store/editors"
 import { roleAdmin, roleSuper } from "../store/user"
 
 const route = useRoute()
@@ -218,7 +217,7 @@ const columns: DataTableColumn<SubmissionOut>[] = [
         { style: { display: "flex", gap: "6px", alignItems: "baseline" } },
         [
           h("span", avgScore),
-          h("span", { style: { fontSize: "11px", color: "#999" } }, myScore),
+          h("span", { style: { fontSize: "11px", color: "var(--wp-faint)" } }, myScore),
         ],
       )
     },
@@ -321,15 +320,8 @@ function afterScore() {
 }
 
 function copyToEditor() {
-  const code = { html: html.value, css: css.value, js: js.value }
-  // 挑战页按任务各存一份代码，教程页还是共用编辑器
-  if (submission.value.task_type === TASK_TYPE.Challenge) {
-    saveTaskCode(submission.value.task_id, code)
-  } else {
-    eHtml.value = code.html
-    eCss.value = code.css
-    eJs.value = code.js
-  }
+  // 教程和挑战的代码都按任务各存一份，打开那个任务时读到
+  saveTaskCode(submission.value.task_id, { html: html.value, css: css.value, js: js.value })
   goHome(router, submission.value.task_type, submission.value.task_display)
 }
 
@@ -395,6 +387,6 @@ onUnmounted(() => {
 }
 
 :deep(.row-active td) {
-  background-color: rgba(24, 160, 80, 0.1) !important;
+  background-color: var(--wp-brand-soft) !important;
 }
 </style>

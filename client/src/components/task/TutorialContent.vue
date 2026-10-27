@@ -8,6 +8,7 @@ import { trustedExtensions } from "../../utils/markdown"
 import copyFn from "copy-text-to-clipboard"
 import { css, html, js, tab } from "../../store/editors"
 import { Tutorial } from "../../api"
+import { readTaskCode } from "../../composables/useTaskCode"
 import { step, tutorialIds, loadTutorials } from "../../store/tutorial"
 import { taskId, assetBaseUrl } from "../../store/task"
 import { useRouter } from "vue-router"
@@ -45,11 +46,13 @@ async function render() {
   const seq = ++renderSeq
   const data = await Tutorial.get(step.value)
   if (seq !== renderSeq) return
+  // 这一节写过代码就接着写，没写过才放示例代码（以前每次切换都会被示例覆盖）
+  const saved = readTaskCode(data.task_ptr)
   taskId.value = data.task_ptr
   assetBaseUrl.value = `/media/tasks/tutorial/${step.value}/`
-  html.value = data.example_html ?? ""
-  css.value = data.example_css ?? ""
-  js.value = data.example_js ?? ""
+  html.value = saved?.html ?? data.example_html ?? ""
+  css.value = saved?.css ?? data.example_css ?? ""
+  js.value = saved?.js ?? data.example_js ?? ""
   const merged = `# ${data.display}. ${data.title}\n${data.content}`
   const rendered = await tutorialMarked.parse(merged, { async: true })
   if (seq !== renderSeq) return
@@ -124,7 +127,7 @@ watch(step, (v) => {
 
 .markdown-body .codeblock-wrapper {
   padding: 1rem;
-  background-color: #f6f8fa;
+  background-color: var(--wp-paper);
   border-radius: 6px;
   margin-bottom: 1rem;
   overflow: auto;
@@ -170,9 +173,9 @@ watch(step, (v) => {
   padding: 0 14px;
   font-size: 14px;
   border-radius: 3px;
-  border: 1px solid #d9d9d9;
-  background-color: #fff;
-  color: #333;
+  border: 1px solid var(--wp-line);
+  background-color: var(--wp-surface);
+  color: var(--wp-ink);
   cursor: pointer;
   transition: all 0.2s ease;
 }

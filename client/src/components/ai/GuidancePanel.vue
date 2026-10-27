@@ -160,11 +160,11 @@ watch([() => messages.value.length, streamingContent], () => {
   font-size: 12px;
   font-weight: bold;
   margin-bottom: 4px;
-  color: #888;
+  color: var(--wp-muted);
 }
 
 .guidance-msg.user .msg-role {
-  color: #2080f0;
+  color: var(--wp-css);
 }
 
 .guidance-msg.assistant .msg-role {
@@ -172,8 +172,8 @@ watch([() => messages.value.length, streamingContent], () => {
 }
 
 .guidance-msg.assistant .msg-content {
-  background: #f0f7ff;
-  border-left: 3px solid #2080f0;
+  background: var(--wp-css-soft);
+  border-left: 3px solid var(--wp-css);
   padding: 8px 12px;
   border-radius: 0 6px 6px 0;
   font-size: 14px;
@@ -183,7 +183,7 @@ watch([() => messages.value.length, streamingContent], () => {
 .guidance-msg.user .msg-content {
   font-size: 14px;
   line-height: 1.6;
-  color: #333;
+  color: var(--wp-ink);
 }
 
 .msg-content :deep(p) {
@@ -198,9 +198,9 @@ watch([() => messages.value.length, streamingContent], () => {
   font-size: 13px;
   font-weight: 500;
   padding: 6px 10px;
-  background: #f0fff4;
+  background: var(--wp-brand-soft);
   border-radius: 6px;
-  border: 1px solid #b8e8cc;
+  border: 1px solid var(--wp-brand-soft);
 }
 
 .typing-indicator {
@@ -213,7 +213,7 @@ watch([() => messages.value.length, streamingContent], () => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #2080f0;
+  background: var(--wp-css);
   animation: bounce 1.4s ease-in-out infinite;
 }
 

@@ -71,7 +71,7 @@ const subColumns = computed((): DataTableColumn<SubmissionOut>[] => [
         { style: { display: "flex", gap: "6px", alignItems: "baseline" } },
         [
           h("span", avgScore),
-          h("span", { style: { fontSize: "11px", color: "#999" } }, myScore),
+          h("span", { style: { fontSize: "11px", color: "var(--wp-faint)" } }, myScore),
         ],
       )
     },

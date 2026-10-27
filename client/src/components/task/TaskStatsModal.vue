@@ -21,7 +21,7 @@
           align="center"
           style="margin-bottom: 16px; flex-wrap: wrap; gap: 6px"
         >
-          <span style="color: #666; font-size: 12px">班级筛选：</span>
+          <span style="color: var(--wp-muted); font-size: 12px">班级筛选：</span>
           <n-button
             size="small"
             :type="selectedClass === null ? 'primary' : 'default'"
@@ -44,7 +44,7 @@
             style="
               display: grid;
               grid-template-columns: repeat(5, 1fr);
-              border: 1px solid #eee;
+              border: 1px solid var(--wp-line);
               border-radius: 6px;
               overflow: hidden;
               margin-bottom: 12px;
@@ -56,7 +56,7 @@
               :style="{
                 padding: '12px 8px',
                 textAlign: 'center',
-                borderRight: i < metrics.length - 1 ? '1px solid #eee' : 'none',
+                borderRight: i < metrics.length - 1 ? '1px solid var(--wp-line)' : 'none',
               }"
             >
               <div
@@ -68,7 +68,7 @@
               >
                 {{ metric.value }}
               </div>
-              <div style="color: #888; font-size: 11px; margin-top: 2px">
+              <div style="color: var(--wp-muted); font-size: 11px; margin-top: 2px">
                 {{ metric.label }}
               </div>
             </div>
@@ -77,7 +77,7 @@
           <!-- 未提交名单（可折叠） -->
           <div
             style="
-              border: 1px solid #eee;
+              border: 1px solid var(--wp-line);
               border-radius: 6px;
               margin-bottom: 8px;
               overflow: hidden;
@@ -90,7 +90,7 @@
                 align-items: center;
                 justify-content: space-between;
                 cursor: pointer;
-                background: #fff8f8;
+                background: var(--wp-bad-soft);
               "
               @click="showUnsubmitted = !showUnsubmitted"
             >
@@ -99,12 +99,12 @@
                   style="
                     width: 7px;
                     height: 7px;
-                    background: #d03050;
+                    background: var(--wp-bad);
                     border-radius: 50%;
                     display: inline-block;
                   "
                 ></span>
-                <span style="font-weight: 600; color: #d03050; font-size: 12px"
+                <span style="font-weight: 600; color: var(--wp-bad); font-size: 12px"
                   >未提交（{{ stats.unsubmitted_count }}人）</span
                 >
               </n-flex>
@@ -115,14 +115,14 @@
                     : 'lucide:chevron-right'
                 "
                 :width="14"
-                style="color: #aaa"
+                style="color: var(--wp-faint)"
               />
             </div>
             <div
               v-if="showUnsubmitted"
               style="
                 padding: 10px 14px;
-                background: #fff8f8;
+                background: var(--wp-bad-soft);
                 display: flex;
                 flex-wrap: wrap;
                 gap: 5px;
@@ -133,12 +133,12 @@
                 :key="u.username"
                 size="small"
                 :bordered="true"
-                style="border-color: #ffd0d0; background: #fff"
+                style="border-color: var(--wp-bad-soft); background: var(--wp-surface)"
                 >{{ displayName(u.username, u.classname) }}</n-tag
               >
               <span
                 v-if="!stats.unsubmitted_users.length"
-                style="color: #aaa; font-size: 12px"
+                style="color: var(--wp-faint); font-size: 12px"
                 >暂无</span
               >
             </div>
@@ -147,7 +147,7 @@
           <!-- 未打分名单（可折叠） -->
           <div
             style="
-              border: 1px solid #eee;
+              border: 1px solid var(--wp-line);
               border-radius: 6px;
               margin-bottom: 12px;
               overflow: hidden;
@@ -160,7 +160,7 @@
                 align-items: center;
                 justify-content: space-between;
                 cursor: pointer;
-                background: #fffaf5;
+                background: var(--wp-warn-soft);
               "
               @click="showUnrated = !showUnrated"
             >
@@ -169,15 +169,15 @@
                   style="
                     width: 7px;
                     height: 7px;
-                    background: #e07800;
+                    background: var(--wp-warn);
                     border-radius: 50%;
                     display: inline-block;
                   "
                 ></span>
-                <span style="font-weight: 600; color: #e07800; font-size: 12px"
+                <span style="font-weight: 600; color: var(--wp-warn); font-size: 12px"
                   >未打分（{{ stats.unrated_count }}人）</span
                 >
-                <span style="font-size: 11px; color: #aaa"
+                <span style="font-size: 11px; color: var(--wp-faint)"
                   >— 还没给任何提交打过分</span
                 >
               </n-flex>
@@ -186,14 +186,14 @@
                   showUnrated ? 'lucide:chevron-down' : 'lucide:chevron-right'
                 "
                 :width="14"
-                style="color: #aaa"
+                style="color: var(--wp-faint)"
               />
             </div>
             <div
               v-if="showUnrated"
               style="
                 padding: 10px 14px;
-                background: #fffaf5;
+                background: var(--wp-warn-soft);
                 display: flex;
                 flex-wrap: wrap;
                 gap: 5px;
@@ -204,12 +204,12 @@
                 :key="u.username"
                 size="small"
                 :bordered="true"
-                style="border-color: #ffd0a0; background: #fff"
+                style="border-color: var(--wp-warn-soft); background: var(--wp-surface)"
                 >{{ displayName(u.username, u.classname) }}</n-tag
               >
               <span
                 v-if="!stats.unrated_users.length"
-                style="color: #aaa; font-size: 12px"
+                style="color: var(--wp-faint); font-size: 12px"
                 >暂无</span
               >
             </div>
@@ -222,11 +222,11 @@
                 font-weight: 600;
                 font-size: 13px;
                 margin-bottom: 8px;
-                color: #333;
+                color: var(--wp-ink);
               "
             >
               提交次数分布
-              <span style="font-size: 11px; color: #aaa; font-weight: 400"
+              <span style="font-size: 11px; color: var(--wp-faint); font-weight: 400"
                 >（已提交的 {{ stats.submitted_count }} 人）</span
               >
             </div>
@@ -252,13 +252,13 @@
                 >
                   {{ bucket.value }}
                 </div>
-                <div style="color: #aaa; font-size: 11px; margin-top: 2px">
+                <div style="color: var(--wp-faint); font-size: 11px; margin-top: 2px">
                   {{ bucket.label }}
                 </div>
                 <div
                   style="
                     margin-top: 8px;
-                    background: #e8e8e8;
+                    background: var(--wp-line);
                     border-radius: 3px;
                     height: 4px;
                   "
@@ -272,7 +272,7 @@
                     }"
                   ></div>
                 </div>
-                <div style="color: #bbb; font-size: 10px; margin-top: 3px">
+                <div style="color: var(--wp-faint); font-size: 10px; margin-top: 3px">
                   {{ bucketPct(bucket.value) }}
                 </div>
               </div>
@@ -286,14 +286,14 @@
                 font-weight: 600;
                 font-size: 13px;
                 margin-bottom: 8px;
-                color: #333;
+                color: var(--wp-ink);
               "
             >
               人气前五
             </div>
             <div
               v-if="stats.top_viewed.length === 0"
-              style="color: #aaa; font-size: 12px"
+              style="color: var(--wp-faint); font-size: 12px"
             >
               暂无
             </div>
@@ -306,10 +306,10 @@
                   align-items: center;
                   gap: 8px;
                   padding: 6px 10px;
-                  border: 1px solid #eee;
+                  border: 1px solid var(--wp-line);
                   border-radius: 6px;
                   cursor: pointer;
-                  background: #fafafa;
+                  background: var(--wp-paper);
                 "
                 @click="viewSubmission(item.submission_id)"
               >
@@ -319,8 +319,8 @@
                     height: '20px',
                     borderRadius: '50%',
                     background:
-                      i < 3 ? ['#f0a020', '#888', '#a07040'][i] : '#ddd',
-                    color: '#fff',
+                      i < 3 ? ['var(--wp-warn)', 'var(--wp-muted)', 'var(--wp-warn)'][i] : 'var(--wp-line)',
+                    color: 'var(--wp-surface)',
                     fontSize: '11px',
                     fontWeight: '700',
                     display: 'flex',
@@ -330,10 +330,10 @@
                   }"
                   >{{ i + 1 }}</span
                 >
-                <span style="flex: 1; font-size: 13px; color: #333">
+                <span style="flex: 1; font-size: 13px; color: var(--wp-ink)">
                   {{ displayName(item.username, item.classname) }}
                 </span>
-                <span style="font-size: 12px; color: #2080f0; font-weight: 600">
+                <span style="font-size: 12px; color: var(--wp-css); font-weight: 600">
                   {{ item.view_count }} 次
                 </span>
               </div>
@@ -395,14 +395,14 @@ function bucketPct(value: number) {
 const metrics = computed(() => {
   if (!stats.value) return []
   return [
-    { label: "已提交", value: stats.value.submitted_count, color: "#18a058" },
-    { label: "未提交", value: stats.value.unsubmitted_count, color: "#d03050" },
+    { label: "已提交", value: stats.value.submitted_count, color: "var(--wp-brand)" },
+    { label: "未提交", value: stats.value.unsubmitted_count, color: "var(--wp-bad)" },
     {
       label: "平均分",
       value: stats.value.average_score?.toFixed(1) ?? "—",
-      color: "#2080f0",
+      color: "var(--wp-css)",
     },
-    { label: "未打分", value: stats.value.unrated_count, color: "#d03050" },
+    { label: "未打分", value: stats.value.unrated_count, color: "var(--wp-bad)" },
   ]
 })
 
@@ -413,30 +413,30 @@ const countBuckets = computed(() => {
     {
       label: "4 次+",
       value: d.count_4_plus,
-      color: "#f0a020",
-      bg: "#fffbf0",
-      borderColor: "#ffe0a0",
+      color: "var(--wp-warn)",
+      bg: "var(--wp-warn-soft)",
+      borderColor: "var(--wp-warn-soft)",
     },
     {
       label: "3 次",
       value: d.count_3,
-      color: "#18a058",
-      bg: "#f0fff4",
-      borderColor: "#c8e8d0",
+      color: "var(--wp-brand)",
+      bg: "var(--wp-brand-soft)",
+      borderColor: "var(--wp-brand-soft)",
     },
     {
       label: "2 次",
       value: d.count_2,
-      color: "#2080f0",
-      bg: "#f0f7ff",
-      borderColor: "#d0e8ff",
+      color: "var(--wp-css)",
+      bg: "var(--wp-css-soft)",
+      borderColor: "var(--wp-css-soft)",
     },
     {
       label: "仅 1 次",
       value: d.count_1,
-      color: "#888",
-      bg: "#fafafa",
-      borderColor: "#e0e0e0",
+      color: "var(--wp-muted)",
+      bg: "var(--wp-paper)",
+      borderColor: "var(--wp-line)",
     },
   ]
 })

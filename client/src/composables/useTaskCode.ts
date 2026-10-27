@@ -4,6 +4,10 @@ import { emptyCode, type Code } from "../utils/code"
 
 const key = (taskId: number) => `web-code:${user.username}:${taskId}`
 
+export function readTaskCode(taskId: number): Code | null {
+  return user.username ? read(taskId) : null
+}
+
 function read(taskId: number): Code | null {
   try {
     const saved = JSON.parse(localStorage.getItem(key(taskId)) ?? "null")

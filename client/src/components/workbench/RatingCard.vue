@@ -169,7 +169,7 @@ watch(
   border-radius: 6px;
   overflow: hidden;
   cursor: zoom-in;
-  background: #fff;
+  background: var(--wp-surface);
 }
 
 /* 按 4 倍大小渲染再缩小，看起来像网页缩略图 */

@@ -82,3 +82,9 @@ iframe {
 .lang-js::before {
   background: var(--wp-js);
 }
+
+/* markdown 区域用页面的底色，暗色时不出现一块 GitHub 的深蓝底 */
+:root[data-theme="dark"] body .markdown-body {
+  background-color: transparent;
+  color: var(--wp-ink);
+}

@@ -34,7 +34,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/challenge",
     name: "home-challenge-list",
-    component: Workspace,
+    component: () => import("./pages/ChallengeHome.vue"),
     meta: { auth: true },
   },
   {
@@ -83,13 +83,15 @@ const routes: RouteRecordRaw[] = [
       {
         path: "tutorial/:display",
         name: "tutorial-editor",
-        component: () => import("./pages/TutorialEditor.vue"),
+        component: () => import("./pages/TaskEditor.vue"),
+        props: { kind: "tutorial" },
         meta: { role: "super" },
       },
       {
         path: "challenge/:display",
         name: "challenge-editor",
-        component: () => import("./pages/ChallengeEditor.vue"),
+        component: () => import("./pages/TaskEditor.vue"),
+        props: { kind: "challenge" },
       },
       {
         path: "user-manage/:page",

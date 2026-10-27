@@ -283,7 +283,7 @@ onMounted(() => {
 .history-toolbar {
   height: 42px;
   padding: 0 12px;
-  border-bottom: 1px solid var(--n-border-color, #efeff5);
+  border-bottom: 1px solid var(--n-border-color, var(--wp-line));
   flex-shrink: 0;
 }
 
@@ -307,12 +307,12 @@ onMounted(() => {
 
 
 .history-card.is-selected {
-  --n-color: #f7fffa;
+  --n-color: var(--wp-brand-soft);
   box-shadow: 0 10px 24px rgba(13, 122, 82, 0.14);
 }
 
 .history-card.is-selected .history-main {
-  background: #eefaf3;
+  background: var(--wp-brand-soft);
 }
 
 .history-main {
@@ -323,7 +323,7 @@ onMounted(() => {
 .prompt-markdown {
   margin: 0;
   padding: 0 12px 12px;
-  color: #333;
+  color: var(--wp-ink);
   font-size: 14px;
   line-height: 1.6;
   word-break: break-word;
@@ -356,8 +356,8 @@ onMounted(() => {
 
 .thumbnail {
   height: 160px;
-  border-top: 1px solid var(--n-border-color, #efeff5);
-  background: #f7f7f9;
+  border-top: 1px solid var(--n-border-color, var(--wp-line));
+  background: var(--wp-paper);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -365,15 +365,15 @@ onMounted(() => {
 }
 
 .history-card.is-selected .thumbnail {
-  border-top-color: #d8f1e2;
-  background: #f4fbf6;
+  border-top-color: var(--wp-brand-soft);
+  background: var(--wp-brand-soft);
 }
 
 .thumbnail iframe {
   width: 100%;
   height: 100%;
   border: 0;
-  background: #fff;
+  background: var(--wp-surface);
   pointer-events: none;
 }
 </style>

@@ -1,0 +1,384 @@
+/* 由 github-markdown-css 的 github-markdown-dark.css 和 highlight.js 的 github-dark.css 生成：
+   每个选择器前加 :root[data-theme="dark"]，只保留颜色相关的声明。暗色模式下覆盖亮色样式 */
+:root[data-theme="dark"] .markdown-body {
+  color-scheme: dark;
+  color: #f0f6fc;
+  background-color: #0d1117;
+}
+:root[data-theme="dark"] .markdown-body .octicon {
+  fill: currentColor;
+}
+:root[data-theme="dark"] .markdown-body h1:hover .anchor .octicon-link:before,
+:root[data-theme="dark"] .markdown-body h2:hover .anchor .octicon-link:before,
+:root[data-theme="dark"] .markdown-body h3:hover .anchor .octicon-link:before,
+:root[data-theme="dark"] .markdown-body h4:hover .anchor .octicon-link:before,
+:root[data-theme="dark"] .markdown-body h5:hover .anchor .octicon-link:before,
+:root[data-theme="dark"] .markdown-body h6:hover .anchor .octicon-link:before {
+  background-color: currentColor;
+}
+:root[data-theme="dark"] .markdown-body a {
+  background-color: rgba(0,0,0,0);
+  color: #4493f8;
+}
+:root[data-theme="dark"] .markdown-body abbr[title] {
+  border-bottom: none;
+}
+:root[data-theme="dark"] .markdown-body h1 {
+  border-bottom: 1px solid #3d444db3;
+}
+:root[data-theme="dark"] .markdown-body mark {
+  background-color: #bb800926;
+  color: #f0f6fc;
+}
+:root[data-theme="dark"] .markdown-body hr {
+  background: rgba(0,0,0,0);
+  border-bottom: 1px solid #3d444db3;
+  background-color: #3d444d;
+  border: 0;
+}
+:root[data-theme="dark"] .markdown-body ::-webkit-input-placeholder {
+  color: inherit;
+}
+:root[data-theme="dark"] .markdown-body ::placeholder {
+  color: #9198a1;
+}
+:root[data-theme="dark"] .markdown-body a:focus,
+:root[data-theme="dark"] .markdown-body [role=button]:focus,
+:root[data-theme="dark"] .markdown-body input[type=radio]:focus,
+:root[data-theme="dark"] .markdown-body input[type=checkbox]:focus {
+  outline: 2px solid var(--borderColor-accent-emphasis);
+  box-shadow: none;
+}
+:root[data-theme="dark"] .markdown-body a:focus:not(:focus-visible),
+:root[data-theme="dark"] .markdown-body [role=button]:focus:not(:focus-visible),
+:root[data-theme="dark"] .markdown-body input[type=radio]:focus:not(:focus-visible),
+:root[data-theme="dark"] .markdown-body input[type=checkbox]:focus:not(:focus-visible) {
+  outline: solid 1px rgba(0,0,0,0);
+}
+:root[data-theme="dark"] .markdown-body a:focus-visible,
+:root[data-theme="dark"] .markdown-body [role=button]:focus-visible,
+:root[data-theme="dark"] .markdown-body input[type=radio]:focus-visible,
+:root[data-theme="dark"] .markdown-body input[type=checkbox]:focus-visible {
+  outline: 2px solid var(--borderColor-accent-emphasis);
+  box-shadow: none;
+}
+:root[data-theme="dark"] .markdown-body kbd {
+  color: #f0f6fc;
+  background-color: #151b23;
+  border: solid 1px var(--borderColor-muted);
+  border-bottom-color: var(--borderColor-muted);
+  box-shadow: inset 0 -1px 0 var(--borderColor-muted);
+}
+:root[data-theme="dark"] .markdown-body h2 {
+  border-bottom: 1px solid #3d444db3;
+}
+:root[data-theme="dark"] .markdown-body h6 {
+  color: #9198a1;
+}
+:root[data-theme="dark"] .markdown-body blockquote {
+  color: #9198a1;
+  border-left: .25em solid #3d444d;
+}
+:root[data-theme="dark"] .markdown-body .octicon {
+  fill: currentColor;
+}
+:root[data-theme="dark"] .markdown-body a:not([href]) {
+  color: inherit;
+}
+:root[data-theme="dark"] .markdown-body .absent {
+  color: #f85149;
+}
+:root[data-theme="dark"] .markdown-body .anchor:focus {
+  outline: none;
+}
+:root[data-theme="dark"] .markdown-body h1 .octicon-link,
+:root[data-theme="dark"] .markdown-body h2 .octicon-link,
+:root[data-theme="dark"] .markdown-body h3 .octicon-link,
+:root[data-theme="dark"] .markdown-body h4 .octicon-link,
+:root[data-theme="dark"] .markdown-body h5 .octicon-link,
+:root[data-theme="dark"] .markdown-body h6 .octicon-link {
+  color: #f0f6fc;
+}
+:root[data-theme="dark"] .markdown-body summary h1,
+:root[data-theme="dark"] .markdown-body summary h2 {
+  border-bottom: 0;
+}
+:root[data-theme="dark"] .markdown-body table th,
+:root[data-theme="dark"] .markdown-body table td {
+  border: 1px solid #3d444d;
+}
+:root[data-theme="dark"] .markdown-body table tr {
+  background-color: #0d1117;
+  border-top: 1px solid #3d444db3;
+}
+:root[data-theme="dark"] .markdown-body table tr:nth-child(2n) {
+  background-color: #151b23;
+}
+:root[data-theme="dark"] .markdown-body table img {
+  background-color: rgba(0,0,0,0);
+}
+:root[data-theme="dark"] .markdown-body .emoji {
+  background-color: rgba(0,0,0,0);
+}
+:root[data-theme="dark"] .markdown-body span.frame>span {
+  border: 1px solid #3d444d;
+}
+:root[data-theme="dark"] .markdown-body span.frame span span {
+  color: #f0f6fc;
+}
+:root[data-theme="dark"] .markdown-body code,
+:root[data-theme="dark"] .markdown-body tt {
+  background-color: #656c7633;
+}
+:root[data-theme="dark"] .markdown-body pre>code {
+  background: rgba(0,0,0,0);
+  border: 0;
+}
+:root[data-theme="dark"] .markdown-body .highlight pre,
+:root[data-theme="dark"] .markdown-body pre {
+  color: #f0f6fc;
+  background-color: #151b23;
+}
+:root[data-theme="dark"] .markdown-body pre code,
+:root[data-theme="dark"] .markdown-body pre tt {
+  background-color: rgba(0,0,0,0);
+  border: 0;
+}
+:root[data-theme="dark"] .markdown-body .csv-data .blob-num {
+  background: #0d1117;
+  border: 0;
+}
+:root[data-theme="dark"] .markdown-body .csv-data tr {
+  border-top: 0;
+}
+:root[data-theme="dark"] .markdown-body .csv-data th {
+  background: #151b23;
+  border-top: 0;
+}
+:root[data-theme="dark"] .markdown-body .footnotes {
+  color: #9198a1;
+  border-top: 1px solid #3d444d;
+}
+:root[data-theme="dark"] .markdown-body .footnotes li:target::before {
+  border: 2px solid #1f6feb;
+}
+:root[data-theme="dark"] .markdown-body .footnotes li:target {
+  color: #f0f6fc;
+}
+:root[data-theme="dark"] .markdown-body .pl-c {
+  color: #9198a1;
+}
+:root[data-theme="dark"] .markdown-body .pl-c1,
+:root[data-theme="dark"] .markdown-body .pl-s .pl-v {
+  color: #79c0ff;
+}
+:root[data-theme="dark"] .markdown-body .pl-e,
+:root[data-theme="dark"] .markdown-body .pl-en {
+  color: #d2a8ff;
+}
+:root[data-theme="dark"] .markdown-body .pl-smi,
+:root[data-theme="dark"] .markdown-body .pl-s .pl-s1 {
+  color: #f0f6fc;
+}
+:root[data-theme="dark"] .markdown-body .pl-ent {
+  color: #7ee787;
+}
+:root[data-theme="dark"] .markdown-body .pl-k {
+  color: #ff7b72;
+}
+:root[data-theme="dark"] .markdown-body .pl-s,
+:root[data-theme="dark"] .markdown-body .pl-pds,
+:root[data-theme="dark"] .markdown-body .pl-s .pl-pse .pl-s1,
+:root[data-theme="dark"] .markdown-body .pl-sr,
+:root[data-theme="dark"] .markdown-body .pl-sr .pl-cce,
+:root[data-theme="dark"] .markdown-body .pl-sr .pl-sre,
+:root[data-theme="dark"] .markdown-body .pl-sr .pl-sra {
+  color: #a5d6ff;
+}
+:root[data-theme="dark"] .markdown-body .pl-v,
+:root[data-theme="dark"] .markdown-body .pl-smw {
+  color: #ffa657;
+}
+:root[data-theme="dark"] .markdown-body .pl-bu {
+  color: #f85149;
+}
+:root[data-theme="dark"] .markdown-body .pl-ii {
+  color: var(--fgColor-danger);
+  background-color: var(--bgColor-danger-muted);
+}
+:root[data-theme="dark"] .markdown-body .pl-c2 {
+  color: #f0f6fc;
+  background-color: #b62324;
+}
+:root[data-theme="dark"] .markdown-body .pl-sr .pl-cce {
+  color: #7ee787;
+}
+:root[data-theme="dark"] .markdown-body .pl-ml {
+  color: #f2cc60;
+}
+:root[data-theme="dark"] .markdown-body .pl-mh,
+:root[data-theme="dark"] .markdown-body .pl-mh .pl-en,
+:root[data-theme="dark"] .markdown-body .pl-ms {
+  color: #1f6feb;
+}
+:root[data-theme="dark"] .markdown-body .pl-mi {
+  color: #f0f6fc;
+}
+:root[data-theme="dark"] .markdown-body .pl-mb {
+  color: #f0f6fc;
+}
+:root[data-theme="dark"] .markdown-body .pl-md {
+  color: #ffdcd7;
+  background-color: #67060c;
+}
+:root[data-theme="dark"] .markdown-body .pl-mi1 {
+  color: #aff5b4;
+  background-color: #033a16;
+}
+:root[data-theme="dark"] .markdown-body .pl-mc {
+  color: #ffdfb6;
+  background-color: #5a1e02;
+}
+:root[data-theme="dark"] .markdown-body .pl-mi2 {
+  color: #f0f6fc;
+  background-color: #1158c7;
+}
+:root[data-theme="dark"] .markdown-body .pl-mdr {
+  color: #d2a8ff;
+}
+:root[data-theme="dark"] .markdown-body .pl-ba {
+  color: #9198a1;
+}
+:root[data-theme="dark"] .markdown-body .pl-sg {
+  color: #3d444d;
+}
+:root[data-theme="dark"] .markdown-body .pl-corl {
+  color: #a5d6ff;
+}
+:root[data-theme="dark"] .markdown-body [role=button]:focus:not(:focus-visible),
+:root[data-theme="dark"] .markdown-body [role=tabpanel][tabindex="0"]:focus:not(:focus-visible),
+:root[data-theme="dark"] .markdown-body button:focus:not(:focus-visible),
+:root[data-theme="dark"] .markdown-body summary:focus:not(:focus-visible),
+:root[data-theme="dark"] .markdown-body a:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+:root[data-theme="dark"] .markdown-body [tabindex="0"]:focus:not(:focus-visible),
+:root[data-theme="dark"] .markdown-body details-dialog:focus:not(:focus-visible) {
+  outline: none;
+}
+:root[data-theme="dark"] .markdown-body a:has(>p,
+:root[data-theme="dark"] >div,
+:root[data-theme="dark"] >pre,
+:root[data-theme="dark"] >blockquote):has(.snippet-clipboard-content,
+:root[data-theme="dark"] >pre):focus-visible {
+  outline: 2px solid var(--borderColor-accent-emphasis);
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert {
+  color: inherit;
+  border-left: .25em solid #3d444d;
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert.markdown-alert-note {
+  border-left-color: #1f6feb;
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: #4493f8;
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert.markdown-alert-important {
+  border-left-color: #8957e5;
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: #ab7df8;
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert.markdown-alert-warning {
+  border-left-color: #9e6a03;
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: #d29922;
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert.markdown-alert-tip {
+  border-left-color: #238636;
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: #3fb950;
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert.markdown-alert-caution {
+  border-left-color: #da3633;
+}
+:root[data-theme="dark"] .markdown-body .markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: #f85149;
+}
+:root[data-theme="dark"] .hljs {
+  color: #c9d1d9;
+  background: #0d1117;
+}
+:root[data-theme="dark"] .hljs-doctag,
+:root[data-theme="dark"] .hljs-keyword,
+:root[data-theme="dark"] .hljs-meta .hljs-keyword,
+:root[data-theme="dark"] .hljs-template-tag,
+:root[data-theme="dark"] .hljs-template-variable,
+:root[data-theme="dark"] .hljs-type,
+:root[data-theme="dark"] .hljs-variable.language_ {
+  color: #ff7b72;
+}
+:root[data-theme="dark"] .hljs-title,
+:root[data-theme="dark"] .hljs-title.class_,
+:root[data-theme="dark"] .hljs-title.class_.inherited__,
+:root[data-theme="dark"] .hljs-title.function_ {
+  color: #d2a8ff;
+}
+:root[data-theme="dark"] .hljs-attr,
+:root[data-theme="dark"] .hljs-attribute,
+:root[data-theme="dark"] .hljs-literal,
+:root[data-theme="dark"] .hljs-meta,
+:root[data-theme="dark"] .hljs-number,
+:root[data-theme="dark"] .hljs-operator,
+:root[data-theme="dark"] .hljs-variable,
+:root[data-theme="dark"] .hljs-selector-attr,
+:root[data-theme="dark"] .hljs-selector-class,
+:root[data-theme="dark"] .hljs-selector-id {
+  color: #79c0ff;
+}
+:root[data-theme="dark"] .hljs-regexp,
+:root[data-theme="dark"] .hljs-string,
+:root[data-theme="dark"] .hljs-meta .hljs-string {
+  color: #a5d6ff;
+}
+:root[data-theme="dark"] .hljs-built_in,
+:root[data-theme="dark"] .hljs-symbol {
+  color: #ffa657;
+}
+:root[data-theme="dark"] .hljs-comment,
+:root[data-theme="dark"] .hljs-code,
+:root[data-theme="dark"] .hljs-formula {
+  color: #8b949e;
+}
+:root[data-theme="dark"] .hljs-name,
+:root[data-theme="dark"] .hljs-quote,
+:root[data-theme="dark"] .hljs-selector-tag,
+:root[data-theme="dark"] .hljs-selector-pseudo {
+  color: #7ee787;
+}
+:root[data-theme="dark"] .hljs-subst {
+  color: #c9d1d9;
+}
+:root[data-theme="dark"] .hljs-section {
+  color: #1f6feb;
+}
+:root[data-theme="dark"] .hljs-bullet {
+  color: #f2cc60;
+}
+:root[data-theme="dark"] .hljs-emphasis {
+  color: #c9d1d9;
+}
+:root[data-theme="dark"] .hljs-strong {
+  color: #c9d1d9;
+}
+:root[data-theme="dark"] .hljs-addition {
+  color: #aff5b4;
+  background-color: #033a16;
+}
+:root[data-theme="dark"] .hljs-deletion {
+  color: #ffdcd7;
+  background-color: #67060c;
+}

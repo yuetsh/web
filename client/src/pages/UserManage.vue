@@ -5,6 +5,7 @@
         <n-input
           style="width: 200px"
           v-model:value="query.username"
+          placeholder="搜索用户名"
           clearable
         />
       </div>
@@ -27,21 +28,26 @@
     <n-data-table striped :columns="columns" :data="users"></n-data-table>
     <UserFormModal v-model:show="showCreate" @saved="init" />
     <n-modal
-      style="width: 300px"
+      style="width: 440px"
       :mask-closable="false"
       preset="card"
-      title="批量新建 (前缀 web)"
+      title="批量新建学生"
       v-model:show="showBatch"
     >
       <n-flex vertical>
+        <n-text depth="3" style="font-size: 13px">
+          每行一个名字。用户名是 web + 班级 + 名字（比如
+          web{{ classname || "241" }}{{ names[0] || "张三" }}），密码随机生成，建好后在列表里点“显示”查看。
+        </n-text>
         <n-input
-          placeholder="班级"
+          placeholder="班级，比如 241"
           v-model:value="classname"
           :disabled="batchLoading"
         />
         <n-input
-          rows="20"
+          rows="16"
           type="textarea"
+          placeholder="张三&#10;李四&#10;王五"
           v-model:value="namesStr"
           :disabled="batchLoading"
         />
@@ -51,7 +57,7 @@
           :loading="batchLoading"
           @click="batchCreateUsers"
         >
-          提交
+          创建 {{ names.length }} 个账号
         </n-button>
       </n-flex>
     </n-modal>
@@ -61,7 +67,7 @@
 import { onMounted, reactive, ref, h, watch, computed } from "vue"
 import { Account } from "../api"
 import { parseTime } from "../utils/helper"
-import { useMessage, type DataTableColumn } from "naive-ui"
+import { NButton, useMessage, type DataTableColumn } from "naive-ui"
 import { getRole, Role, type User } from "../utils/type"
 import UserActions from "../components/dashboard/UserActions.vue"
 import UserFormModal from "../components/dashboard/UserFormModal.vue"
@@ -82,7 +88,13 @@ const showBatch = ref(false)
 const showCreate = ref(false)
 const classname = ref("")
 const namesStr = ref("")
-const names = computed(() => namesStr.value.split("\n").filter((it) => !!it))
+const names = computed(() =>
+  namesStr.value
+    .split("\n")
+    .map((it) => it.trim())
+    .filter((it) => !!it),
+)
+const revealed = reactive(new Set<number>())
 
 const batchLoading = ref(false)
 
@@ -99,8 +111,19 @@ const columns: DataTableColumn<User>[] = [
     key: "username",
   },
   {
-    title: "密码",
+    // 密码默认不显示，投屏时不会被学生看到
+    title: "初始密码",
     key: "raw_password",
+    render: (row) =>
+      !row.raw_password
+        ? "—"
+        : revealed.has(row.id)
+        ? h("span", { style: "font-family: var(--wp-font-mono)" }, row.raw_password)
+        : h(
+            NButton,
+            { text: true, size: "small", onClick: () => revealed.add(row.id) },
+            () => "显示",
+          ),
   },
   {
     title: "创建时间",

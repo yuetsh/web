@@ -5,6 +5,9 @@ import { css } from "@codemirror/lang-css"
 import { javascript } from "@codemirror/lang-javascript"
 import { html } from "@codemirror/lang-html"
 import { computed } from "vue"
+import { syntaxHighlighting } from "@codemirror/language"
+import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark"
+import { isDark } from "../../store/theme"
 
 const styleTheme = EditorView.baseTheme({
   "& .cm-scroller": {
@@ -44,13 +47,24 @@ const lang = computed(() => {
 
 const bgTheme = computed(() => {
   const bg = bgColors[props.language] ?? "var(--wp-surface)"
-  return EditorView.theme({
-    "&": { backgroundColor: bg },
-    ".cm-gutters": { backgroundColor: bg },
-  })
+  return EditorView.theme(
+    {
+      "&": { backgroundColor: bg, color: "var(--wp-ink)" },
+      ".cm-gutters": { backgroundColor: bg, color: "var(--wp-faint)", borderColor: "var(--wp-line)" },
+      ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "rgba(127, 127, 127, 0.08)" },
+      ".cm-cursor": { borderLeftColor: "var(--wp-ink)" },
+    },
+    { dark: isDark.value },
+  )
 })
 
-const extensions = computed(() => [styleTheme, bgTheme.value, lang.value])
+// 暗色时换成 One Dark 的语法配色（默认配色是给浅色背景设计的）
+const extensions = computed(() => [
+  styleTheme,
+  bgTheme.value,
+  ...(isDark.value ? [syntaxHighlighting(oneDarkHighlightStyle)] : []),
+  lang.value,
+])
 </script>
 <template>
   <Codemirror

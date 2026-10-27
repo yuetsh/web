@@ -10,7 +10,7 @@
         <span>提示词</span>
         <n-tooltip placement="bottom-start">
           <template #trigger>
-            <Icon icon="lucide:info" :width="20" style="color: #aaa" />
+            <Icon icon="lucide:info" :width="20" style="color: var(--wp-faint)" />
           </template>
           <div style="line-height: 2">
             <div>
@@ -71,7 +71,7 @@
           style="
             overflow-y: auto;
             padding-right: 8px;
-            border-right: 1px solid #e0e0e0;
+            border-right: 1px solid var(--wp-line);
             display: flex;
             flex-direction: column;
             gap: 8px;
@@ -94,8 +94,8 @@
                 width: '22px',
                 height: '22px',
                 borderRadius: '50%',
-                background: selectedRound === index ? '#2080f0' : '#c2d5fb',
-                color: '#fff',
+                background: selectedRound === index ? 'var(--wp-css)' : 'var(--wp-css-soft)',
+                color: 'var(--wp-surface)',
                 fontSize: '12px',
                 fontWeight: 'bold',
                 display: 'flex',
@@ -112,11 +112,11 @@
                 flex: 1,
                 padding: '10px 14px',
                 borderRadius: '8px',
-                background: selectedRound === index ? '#e8f0fe' : '#f5f5f5',
+                background: selectedRound === index ? 'var(--wp-css-soft)' : 'var(--wp-paper)',
                 border:
                   selectedRound === index
-                    ? '1px solid #2080f0'
-                    : '1px solid #e0e0e0',
+                    ? '1px solid var(--wp-css)'
+                    : '1px solid var(--wp-line)',
                 fontSize: '13px',
                 lineHeight: '1.6',
                 transition: 'all 0.2s',
@@ -154,9 +154,9 @@
                       padding: '1px 5px',
                       borderRadius: '4px',
                       background:
-                        round.source === 'conversation' ? '#e8f0fe' : '#f0f0f0',
+                        round.source === 'conversation' ? 'var(--wp-css-soft)' : 'var(--wp-line)',
                       color:
-                        round.source === 'conversation' ? '#2060c0' : '#888',
+                        round.source === 'conversation' ? 'var(--wp-css)' : 'var(--wp-muted)',
                       fontWeight: 500,
                       whiteSpace: 'nowrap',
                     }"
@@ -212,7 +212,7 @@
           </div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px">
-          <div style="font-weight: bold; font-size: 13px; color: #555">
+          <div style="font-weight: bold; font-size: 13px; color: var(--wp-ink)">
             第 {{ selectedRound + 1 }} 轮网页
           </div>
           <iframe
@@ -222,9 +222,9 @@
             sandbox="allow-scripts"
             style="
               flex: 1;
-              border: 1px solid #e0e0e0;
+              border: 1px solid var(--wp-line);
               border-radius: 6px;
-              background: #fff;
+              background: var(--wp-surface);
             "
           />
           <n-empty v-else description="该轮无网页代码" style="margin: auto" />
@@ -285,12 +285,12 @@ async function deleteRound(index: number) {
 }
 
 const levelColors: Record<number, string> = {
-  1: "#aaa",
-  2: "#6aab9c",
-  3: "#4a9ade",
+  1: "var(--wp-faint)",
+  2: "var(--wp-brand)",
+  3: "var(--wp-css)",
   4: "#c47ab8",
-  5: "#e0a040",
-  6: "#e05c5c",
+  5: "var(--wp-warn)",
+  6: "var(--wp-bad)",
 }
 
 const selectedPageHtml = computed(() => {
