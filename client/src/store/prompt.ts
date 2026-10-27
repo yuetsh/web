@@ -19,6 +19,8 @@ export const conversationId = ref<string>("")
 export const connected = ref(false)
 export const streaming = ref(false)
 export const streamingContent = ref("")
+// 这次提问发出的时间：AI 先思考，第一个字可能一两分钟后才出来，界面据此显示等了多久
+export const streamStartedAt = ref(0)
 export const currentTaskId = ref(0)
 // 新代码交给工作台处理：init 是连上时对话里最新的那一版，complete 是 AI 刚生成的
 let _codeSink:
@@ -106,6 +108,7 @@ export function disconnectPrompt() {
 export function sendPrompt(content: string, model: string = "") {
   if (!socket.send({ type: "message", content, model })) return
   streaming.value = true
+  streamStartedAt.value = Date.now()
   messages.value.push({ role: "user", content })
 }
 

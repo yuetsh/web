@@ -52,15 +52,26 @@
       <!-- Streaming indicator -->
       <div v-if="streaming" class="message assistant">
         <div class="message-role">AI</div>
-        <div v-if="!streamingContent" class="typing-indicator">
-          <span></span><span></span><span></span>
-        </div>
-        <div
-          v-else
-          class="message-content"
-          v-html="renderMarkdown(streamingContent)"
-        ></div>
-        <div class="streaming-hint">AI 正在生成中…</div>
+        <template v-if="!streamingContent">
+          <div class="typing-indicator">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="streaming-hint">
+            AI 正在构思… 已 {{ elapsedText }}<template v-if="elapsed >= 20">，复杂的网页要想一两分钟</template>
+          </div>
+        </template>
+        <template v-else>
+          <div
+            v-if="streamParts.prose"
+            class="message-content"
+            v-html="renderMarkdown(streamParts.prose)"
+          ></div>
+          <div v-if="streamParts.lines >= 0" class="code-progress">
+            <Icon icon="lucide:sparkles" :width="14" />
+            正在写网页… 已写 {{ streamParts.lines }} 行
+          </div>
+          <div v-else class="streaming-hint">AI 正在回复…</div>
+        </template>
       </div>
       <RatingCard v-if="rating" :active="streaming" />
     </div>
@@ -122,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from "vue"
+import { ref, watch, nextTick, computed, onUnmounted } from "vue"
 import { useStorage } from "@vueuse/core"
 import { useMessage } from "naive-ui"
 import { Icon } from "../../icons"
@@ -133,6 +144,7 @@ import {
   messages,
   streaming,
   streamingContent,
+  streamStartedAt,
   connected,
   sendPrompt,
   stopPrompt,
@@ -238,9 +250,46 @@ async function onGuidanceGenerate(finalPrompt: string) {
   sendPrompt(finalPrompt, selectedModel.value)
 }
 
-function renderContent(msg: { role: string; content: string }): string {
-  return renderMarkdown(msg.content)
+// 学生只关心成品：AI 回复里的代码块不在对话里展开（右边“代码”里能看），只说写了多少行。
+// 按 ``` 切开，奇数段是代码；段数是偶数说明最后一个代码块还没写完
+function splitCode(text: string) {
+  const parts = text.split("```")
+  const prose = parts.filter((_, i) => i % 2 === 0).join("\n\n").trim()
+  const code = parts.filter((_, i) => i % 2 === 1)
+  const lines = code.reduce((n, c) => n + c.split("\n").length - 1, 0)
+  return { prose, lines: code.length ? lines : -1 }
 }
+
+const streamParts = computed(() => splitCode(streamingContent.value))
+
+function renderContent(msg: { role: string; content: string }): string {
+  if (msg.role !== "assistant") return renderMarkdown(msg.content)
+  const { prose, lines } = splitCode(msg.content)
+  const note = lines >= 0 ? `<p class="code-note">网页代码 ${lines} 行，在右边“代码”里看</p>` : ""
+  return renderMarkdown(prose) + note
+}
+
+// 等 AI 的计时：每秒刷新一次
+const now = ref(Date.now())
+let ticker: ReturnType<typeof setInterval> | undefined
+watch(
+  streaming,
+  (on) => {
+    clearInterval(ticker)
+    now.value = Date.now()
+    if (on) ticker = setInterval(() => (now.value = Date.now()), 1000)
+  },
+  { immediate: true },
+)
+onUnmounted(() => clearInterval(ticker))
+
+const elapsed = computed(() =>
+  streamStartedAt.value ? Math.max(0, Math.floor((now.value - streamStartedAt.value) / 1000)) : 0,
+)
+const elapsedText = computed(() => {
+  const s = elapsed.value
+  return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分 ${s % 60} 秒`
+})
 
 watch([() => messages.value.length, streamingContent], () => {
   nextTick(() => {
@@ -375,6 +424,20 @@ watch([() => messages.value.length, streamingContent], () => {
     transform: translateY(-6px);
     opacity: 1;
   }
+}
+
+.code-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--wp-muted);
+}
+
+.message-content :deep(.code-note) {
+  font-size: 12px;
+  color: var(--wp-muted);
 }
 
 .streaming-hint {
