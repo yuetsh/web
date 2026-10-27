@@ -415,7 +415,7 @@ describe("作品展", () => {
 
     const author1 = await client("author")
     expect((await author1("GET", "/api/submission/showcase/")).json).toHaveLength(1)
-    expect((await author1("GET", `/api/submission/showcase/${uuid(sub)}/`)).json.awards).toEqual(["最佳"])
+    expect((await author1("GET", `/api/submission/showcase/${uuid(sub)}/`)).json).toMatchObject({ awards: ["最佳"], task_type: "challenge" })
 
     await adm("PUT", `/api/submission/showcase/manage/awards/${award.id}`, { name: "最佳", is_active: false })
     expect((await author1("GET", "/api/submission/showcase/")).json).toEqual([])

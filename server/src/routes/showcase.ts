@@ -20,7 +20,7 @@ const ORDER_BY: Record<string, string> = {
 const HAS_CHAIN = `EXISTS (SELECT 1 FROM prompt_message m WHERE m.submission_id = s.id) AS has_prompt_chain`
 
 const ITEM_SELECT = `SELECT sa.id, sa.submission_id, sa.sort_order, sa.awarded_at, sa.is_stale,
-    u.username, t.title AS task_title, t.display AS task_display,
+    u.username, t.title AS task_title, t.display AS task_display, t.task_type,
     s.score, s.view_count, s.html, s.css, s.js, ${HAS_CHAIN}
   FROM submission_submissionaward sa
   JOIN submission_submission s ON s.id = sa.submission_id
@@ -34,6 +34,7 @@ function itemManageOut(r: any) {
     username: r.username,
     task_title: r.task_title,
     task_display: r.task_display,
+    task_type: r.task_type,
     score: r.score,
     view_count: r.view_count,
     sort_order: r.sort_order,
@@ -104,6 +105,7 @@ router.get("/", (c) => {
         username: r.username,
         task_title: r.task_title,
         task_display: r.task_display,
+        task_type: r.task_type,
         score: r.score,
         view_count: r.view_count,
         html: r.html,
@@ -167,7 +169,7 @@ router.get("/manage/submissions/:submission_id", (c) => {
   const id = uuidParam(c, "submission_id")
   const s = orNotFound(
     get(
-      `SELECT s.id, u.username, t.title AS task_title, t.display AS task_display,
+      `SELECT s.id, u.username, t.title AS task_title, t.display AS task_display, t.task_type,
          s.score, s.view_count, ${HAS_CHAIN}
        FROM submission_submission s
        JOIN account_user u ON u.id = s.user_id
@@ -181,6 +183,7 @@ router.get("/manage/submissions/:submission_id", (c) => {
     username: s.username,
     task_title: s.task_title,
     task_display: s.task_display,
+    task_type: s.task_type,
     score: s.score,
     view_count: s.view_count,
     has_prompt_chain: bool(s.has_prompt_chain),
@@ -301,7 +304,7 @@ router.get("/:submission_id", (c) => {
   assertAwarded(id)
   const s = orNotFound(
     get(
-      `SELECT s.id, u.username, t.title AS task_title, t.display AS task_display,
+      `SELECT s.id, u.username, t.title AS task_title, t.display AS task_display, t.task_type,
          s.score, s.view_count, s.html, s.css, s.js, ${HAS_CHAIN}
        FROM submission_submission s
        JOIN account_user u ON u.id = s.user_id
@@ -320,6 +323,7 @@ router.get("/:submission_id", (c) => {
     username: s.username,
     task_title: s.task_title,
     task_display: s.task_display,
+    task_type: s.task_type,
     score: s.score,
     view_count: s.view_count,
     html: s.html,

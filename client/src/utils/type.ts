@@ -261,6 +261,7 @@ export interface ShowcaseItem {
   username: string
   task_title: string
   task_display: number
+  task_type: TASK_TYPE
   score: number
   view_count: number
   html: string | null
@@ -306,6 +307,7 @@ export interface ShowcaseSubmissionLookupOut {
   username: string
   task_title: string
   task_display: number
+  task_type: TASK_TYPE
   score: number
   view_count: number
   has_prompt_chain: boolean
@@ -317,6 +319,7 @@ export interface AwardItemManageOut {
   username: string
   task_title: string
   task_display: number
+  task_type: TASK_TYPE
   score: number
   view_count: number
   sort_order: number
@@ -330,6 +333,7 @@ export interface ShowcaseDetail {
   username: string
   task_title: string
   task_display: number
+  task_type: TASK_TYPE
   score: number
   view_count: number
   html: string | null
