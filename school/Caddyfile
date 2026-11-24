@@ -1,0 +1,45 @@
+# 机房的 WebPreview：只放前端，/api、/ws 转给服务器（web.xuyue.cc），全站只有服务器上那一份 SQLite。
+# 学生机出不了外网，是这台机器替它们去连服务器（走 192.168.1.1 那条线）。
+:80 {
+	encode gzip zstd
+
+	# 上传的素材：Syncthing 从服务器同步到 ./media，本地有就直接给；刚上传、还没同步过来的找服务器要
+	handle_path /media/* {
+		# 理由同服务器那份 Caddyfile：上传的 html/svg 直接打开时不能当成本站页面跑脚本
+		header {
+			Content-Security-Policy "sandbox"
+			X-Content-Type-Options "nosniff"
+			Access-Control-Allow-Origin "*"
+		}
+		root * /media
+		@missing not file
+		handle @missing {
+			rewrite * /media{path}
+			reverse_proxy https://web.xuyue.cc {
+				header_up Host {upstream_hostport}
+				header_down -Content-Security-Policy
+				header_down -X-Content-Type-Options
+				header_down -Access-Control-Allow-Origin
+			}
+		}
+		file_server
+	}
+
+	handle /api* {
+		reverse_proxy https://web.xuyue.cc {
+			header_up Host {upstream_hostport}
+		}
+	}
+
+	handle /ws* {
+		reverse_proxy https://web.xuyue.cc {
+			header_up Host {upstream_hostport}
+		}
+	}
+
+	handle {
+		root * /usr/share/caddy
+		try_files {path} /
+		file_server
+	}
+}

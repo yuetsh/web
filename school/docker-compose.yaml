@@ -1,0 +1,12 @@
+# 机房的 WebPreview：只有前端 + 反代，后端和数据库在服务器上（见 Caddyfile）
+services:
+  webpreview-web:
+    image: caddy:alpine
+    container_name: webpreview-web
+    volumes:
+      - ./build:/usr/share/caddy:ro
+      - ./media:/media:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "91:80"
+    restart: unless-stopped

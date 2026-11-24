@@ -18,11 +18,8 @@ jobs:
           - name: debian
             build_command: build
             remote_port: 22
-          # school 暂时停用，需要时恢复。那台还没从 Postgres 迁到 SQLite：迁移脚本、webpreview-db 服务和
-          # 步骤文档已删除，从提交 cdeb7c1 里找回（git show cdeb7c1:docs/migrate-to-bun.md）
-          # - name: school
-          #   build_command: build:staging
-          #   remote_port: 8822
+          # 机房（school）不在这里：那边只放前端，/api、/ws 反代到 web.xuyue.cc，全站一份 SQLite。
+          # 配置和手动部署步骤见 school/README.md
     steps:
       - uses: actions/checkout@v7
 
