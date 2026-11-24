@@ -7,7 +7,7 @@
 - `/media` 先读本地 `./media`（Syncthing 从服务器同步过来），没有的再找服务器要。
 - 学生访问 `http://10.13.114.114:91`。服务器后端默认的 `ALLOWED_ORIGINS` 已经包含这个地址。
 
-部署（机房那台在 `/root/WebPreview`，`ssh fschool` 经服务器跳板进去）：
+平时 push 到 origin 的 main，`.gitea/workflows/deploy.yml` 会顺带部署机房。手动部署（机房那台在 `/root/WebPreview`，`ssh fschool` 经服务器跳板进去）：
 
 ```bash
 bun run build:staging

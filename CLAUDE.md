@@ -39,7 +39,7 @@ The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1
 
 - **`Caddyfile`** — serves SPA from `build/` and `/media`, proxies `/api*` and `/ws*` to the backend
 - **`docker-compose.yaml`** — `webpreview-web` (Caddy) and `webpreview-api` (Bun); the API reads the repo-root `.env` via `env_file` (`server/.env` is only for local dev). The one-time Postgres → SQLite migration (script, `webpreview-db` service, `docs/migrate-to-bun.md`) was removed after commit `cdeb7c1`; restore it from there if another server still needs the cutover
-- **`.github/workflows/deploy.yaml`** — on push to `main`: build client with Bun, rsync to server `build/`, then `git pull && docker compose up -d --build` on the server
+- **`.gitea/workflows/deploy.yml`** — on push to `main` (origin = git.xuyue.cc), run by the gitea-runner on the dev machine (label `webpreview-deploy`): build the client twice, rsync to the server's `build/` then `git pull && docker compose up -d --build` there; then the school box (`school/`: frontend-only Caddy that proxies `/api`, `/ws` back to the server, see `school/README.md`)
 
 ## Development Commands
 

@@ -1,0 +1,80 @@
+# push 到 origin（git.xuyue.cc）的 main 就部署，在开发机上的 gitea-runner 跑（标签 webpreview-deploy，
+# 和 OJ2 同一个 runner）。开发机关着时任务排队，开机后自动接着跑。
+#
+#   服务器（debian）：前端产物 rsync 到 build/，再 git pull + docker compose up -d --build（后端在服务器上构建）
+#   机房（school）  ：只放前端（build:staging）+ Caddy，/api、/ws 反代回服务器，见 school/README.md
+#
+# ssh 用开发机 ~/.ssh/config 里的 debian / fschool（fschool 经 debian 跳板，公网不开 8822）。
+# 有 .gitea/workflows 时 Gitea 不再读 .github/workflows，原来那份 GitHub 的已删掉（从来没跑过）。
+
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: webpreview-deploy
+  cancel-in-progress: false
+
+env:
+  SSH_OPTS: -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=8
+
+jobs:
+  deploy:
+    runs-on: webpreview-deploy
+    timeout-minutes: 20
+    steps:
+      - name: 取代码
+        env:
+          SHA: ${{ gitea.sha }}
+          REPO: ${{ gitea.repository }}
+        run: |
+          git init -q .
+          git fetch -q --depth 1 "git@git.xuyue.cc:$REPO.git" "$SHA"
+          git checkout -q --force FETCH_HEAD
+          git clean -ffdxq -e node_modules
+          git log --oneline -1
+
+      - name: 编前端（服务器版 + 机房版）
+        run: |
+          bun install --frozen-lockfile --filter webpreview-client
+          bun run build
+          mv client/dist dist-debian
+          bun run build:staging
+          mv client/dist dist-school
+
+      - name: 服务器：前端
+        run: |
+          rsync -az --delete --no-owner --no-group -e "ssh $SSH_OPTS" \
+            dist-debian/ debian:/root/WebPreview/build/
+
+      - name: 服务器：后端
+        run: |
+          ssh $SSH_OPTS debian 'set -e
+            cd /root/WebPreview
+            git pull --ff-only origin main
+            docker compose up -d --build
+            sleep 3
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8081/api/account/profile)
+            [ "$code" = 200 ] || { docker logs --tail 30 webpreview-api; echo "接口不是 200：$code"; exit 1; }
+            echo "服务器 OK"'
+
+      # 机房关机、断网时只有这一步红，服务器已经部署好了。修好后重跑这个任务就行
+      - name: 机房：前端 + Caddy
+        run: |
+          rsync -az --delete --no-owner --no-group -e "ssh $SSH_OPTS" \
+            dist-school/ fschool:/root/WebPreview/build/
+          # Caddyfile 是单文件挂载：rsync 换了 inode，容器里看到的还是旧的，变了就重启容器
+          changed=$(rsync -ac --no-owner --no-group -i -e "ssh $SSH_OPTS" \
+            school/Caddyfile school/docker-compose.yaml fschool:/root/WebPreview/)
+          ssh $SSH_OPTS fschool "set -e
+            cd /root/WebPreview
+            docker compose up -d
+            if [ -n '$changed' ]; then docker compose restart; fi
+            sleep 2
+            code=\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:91/api/account/profile)
+            [ \"\$code\" = 200 ] || { docker logs --tail 30 webpreview-web; echo \"机房反代接口不是 200：\$code\"; exit 1; }
+            echo '机房 OK'"
