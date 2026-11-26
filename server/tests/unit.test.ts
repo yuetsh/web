@@ -47,6 +47,14 @@ describe("extractCode", () => {
   test("没有代码块", () => {
     expect(extractCode("hello")).toEqual({ html: null, css: null, js: null })
   })
+  test("最后的 </script> 漏写了，脚本取到结尾", () => {
+    const text = "```html\n<style>a{}</style>\n<div id=\"g\"></div>\n<script>\nnew Game()\n```"
+    expect(extractCode(text)).toEqual({ html: '<div id="g"></div>', css: "a{}", js: "new Game()" })
+  })
+  test("多个 style / script 都保留", () => {
+    const text = "```html\n<style>a{}</style><p/><style>b{}</style>\n<script>f()</script>\n<script>g()</script>\n```"
+    expect(extractCode(text)).toEqual({ html: "<p/>", css: "a{}\n\nb{}", js: "f()\n\ng()" })
+  })
 })
 
 test("parseGuidanceResponse", () => {

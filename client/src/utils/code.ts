@@ -11,16 +11,17 @@ export const sameCode = (a: Code, b: Code) =>
 
 export const isEmptyCode = (c: Code) => !c.html.trim() && !c.css.trim() && !c.js.trim()
 
-// 把一整页 HTML（外部 AI 常给的格式）拆成 html / css / js 三段
+// 把一整页 HTML（外部 AI 常给的格式）拆成 html / css / js 三段。
+// 漏写最后的结束标签时一直取到结尾，否则整段脚本留在 html 里，预览既不运行也不报错
 export function splitHtml(raw: string): Code {
   const cssBlocks: string[] = []
   const jsBlocks: string[] = []
-  let result = raw.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_, content) => {
+  let result = raw.replace(/<style[^>]*>([\s\S]*?)(?:<\/style>|$)/gi, (_, content) => {
     cssBlocks.push(content.trim())
     return ""
   })
   result = result.replace(
-    /<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script>/gi,
+    /<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)(?:<\/script>|$)/gi,
     (_, content) => {
       jsBlocks.push(content.trim())
       return ""

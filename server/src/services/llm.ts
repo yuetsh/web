@@ -258,6 +258,17 @@ export interface ExtractedCode {
   js: string | null
 }
 
+// 把 html 里所有 <tag>…</tag> 的内容取出来并去掉；AI 偶尔漏写最后的结束标签（长代码里常见），
+// 这时一直取到结尾——否则整段脚本留在 html 里，预览既不运行也不报错
+function takeBlocks(html: string, tag: "style" | "script"): [string, string | null] {
+  const blocks: string[] = []
+  const rest = html.replace(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)(?:</${tag}>|$)`, "gi"), (_, content: string) => {
+    if (content.trim()) blocks.push(content.trim())
+    return ""
+  })
+  return [rest, blocks.length ? blocks.join("\n\n") : null]
+}
+
 // 从 AI 回复中提取代码：支持单个 html 代码块（新）或分开的 html/css/js 代码块（旧）
 export function extractCode(text: string): ExtractedCode {
   const result: ExtractedCode = { html: null, css: null, js: null }
@@ -272,16 +283,8 @@ export function extractCode(text: string): ExtractedCode {
   // 单个 HTML 代码块：把 <style>/<script> 的内容拆出来，并从 html 中去掉
   if (result.html && result.css === null && result.js === null) {
     let html = result.html
-    const style = /<style[^>]*>([\s\S]*?)<\/style>/i.exec(html)
-    if (style) {
-      result.css = style[1]!.trim()
-      html = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    }
-    const script = /<script[^>]*>([\s\S]*?)<\/script>/i.exec(html)
-    if (script) {
-      result.js = script[1]!.trim()
-      html = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    }
+    ;[html, result.css] = takeBlocks(html, "style")
+    ;[html, result.js] = takeBlocks(html, "script")
     result.html = html.trim()
   }
   return result
