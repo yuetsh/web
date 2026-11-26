@@ -1,0 +1,10 @@
+sheets/ 里的图集来自 Kenney（https://kenney.nl），协议 CC0（Creative Commons Zero），可以自由使用、修改和分发：
+
+  platformer.png, platformer-characters.png, platformer-backgrounds.png  Pixel Platformer          https://kenney.nl/assets/pixel-platformer
+  platformer-food.png                                                    Pixel Platformer Food Expansion
+  shmup-ships.png, shmup-tiles.png                                       Pixel Shmup               https://kenney.nl/assets/pixel-shmup
+  dungeon.png                                                            Tiny Dungeon              https://kenney.nl/assets/tiny-dungeon
+  town.png                                                               Tiny Town                 https://kenney.nl/assets/tiny-town
+
+图集是各素材包 Tilemap/ 里的 *_packed.png（格子之间没有空隙）。assets.json 给每个格子起名字：
+frames 是格子编号（从左到右、从上到下，从 0 数），多个编号是动画帧。preview.html 按清单显示全部素材。

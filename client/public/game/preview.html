@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>游戏素材</title>
+    <!-- 按 assets.json 把每个素材从图集里切出来放大显示，多帧的播动画；改了清单刷新就能看 -->
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; background: #f4f6f8; color: #222 }
+      h1 { font-size: 20px; margin: 0 0 4px }
+      h2 { font-size: 16px; margin: 28px 0 10px }
+      .muted { color: #667; font-size: 12px }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px }
+      .item { background: #fff; border: 1px solid #dde3e8; border-radius: 8px; padding: 10px; text-align: center }
+      canvas { image-rendering: pixelated; background: #cfe3f0; border-radius: 4px; max-width: 100% }
+      .name { font-family: ui-monospace, monospace; font-weight: 600; margin-top: 6px }
+    </style>
+  </head>
+  <body>
+    <h1>游戏素材</h1>
+    <div class="muted" id="summary"></div>
+    <div id="root"></div>
+    <script>
+      const anims = []
+      function el(tag, cls, text) {
+        const e = document.createElement(tag)
+        if (cls) e.className = cls
+        if (text) e.textContent = text
+        return e
+      }
+      function card(canvas, name, desc) {
+        const d = el("div", "item")
+        d.append(canvas, el("div", "name", name), el("div", "muted", desc))
+        return d
+      }
+      function loadImage(src) {
+        return new Promise((resolve, reject) => {
+          const i = new Image()
+          i.onload = () => resolve(i)
+          i.onerror = reject
+          i.src = src
+        })
+      }
+      async function main() {
+        const data = await (await fetch("assets.json")).json()
+        const imgs = {}
+        await Promise.all(Object.entries(data.sheets).map(async ([k, s]) => (imgs[k] = await loadImage(s.file))))
+        const drawCell = (ctx, sheet, f, x, y, scale) => {
+          const s = data.sheets[sheet]
+          ctx.drawImage(imgs[sheet], (f % s.cols) * s.size, Math.floor(f / s.cols) * s.size, s.size, s.size, x, y, s.size * scale, s.size * scale)
+        }
+        const total = data.groups.reduce((n, g) => n + g.sprites.length, 0)
+        document.getElementById("summary").textContent = `${total} 个素材、${data.backgrounds.length} 张背景。${data.source}。放大 3 倍显示，多帧的在播动画。`
+        const root = document.getElementById("root")
+        for (const g of data.groups) {
+          root.append(el("h2", "", `${g.title}（${g.sprites.length}）`))
+          const grid = el("div", "grid")
+          root.append(grid)
+          for (const sp of g.sprites) {
+            const size = data.sheets[sp.sheet].size
+            const c = el("canvas")
+            c.width = c.height = size * 3
+            const ctx = c.getContext("2d")
+            ctx.imageSmoothingEnabled = false
+            drawCell(ctx, sp.sheet, sp.frames[0], 0, 0, 3)
+            if (sp.frames.length > 1) anims.push({ ctx, sp })
+            grid.append(card(c, sp.name, sp.desc))
+          }
+        }
+        root.append(el("h2", "", `整张背景（${data.backgrounds.length}，800×600，缩小显示）`))
+        const grid = el("div", "grid")
+        grid.style.gridTemplateColumns = "repeat(auto-fill, minmax(300px, 1fr))"
+        root.append(grid)
+        for (const bg of data.backgrounds) {
+          const c = el("canvas")
+          c.width = 800
+          c.height = 600
+          const ctx = c.getContext("2d")
+          ctx.imageSmoothingEnabled = false
+          const t = data.sheets[bg.sheet].size * 4
+          const row = (f, y) => { for (let x = 0; x < 800; x += t) drawCell(ctx, bg.sheet, f, x, y, 4) }
+          for (let y = 0; y < 600 - 2 * t; y += t) row(bg.top, y)
+          row(bg.middle, 600 - 2 * t)
+          row(bg.bottom, 600 - t)
+          grid.append(card(c, bg.name, bg.desc))
+        }
+        let i = 0
+        setInterval(() => {
+          i++
+          for (const { ctx, sp } of anims) {
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+            drawCell(ctx, sp.sheet, sp.frames[i % sp.frames.length], 0, 0, 3)
+          }
+        }, 300)
+      }
+      main()
+    </script>
+  </body>
+</html>

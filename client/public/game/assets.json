@@ -1,0 +1,212 @@
+{
+  "source": "Kenney (kenney.nl), CC0: Pixel Platformer, Pixel Platformer Food Expansion, Pixel Shmup, Tiny Dungeon, Tiny Town",
+  "sheets": {
+    "platformer": {
+      "file": "sheets/platformer.png",
+      "size": 18,
+      "cols": 20
+    },
+    "platformer-characters": {
+      "file": "sheets/platformer-characters.png",
+      "size": 24,
+      "cols": 9
+    },
+    "platformer-backgrounds": {
+      "file": "sheets/platformer-backgrounds.png",
+      "size": 24,
+      "cols": 8
+    },
+    "platformer-food": {
+      "file": "sheets/platformer-food.png",
+      "size": 18,
+      "cols": 16
+    },
+    "shmup-ships": {
+      "file": "sheets/shmup-ships.png",
+      "size": 32,
+      "cols": 4
+    },
+    "shmup-tiles": {
+      "file": "sheets/shmup-tiles.png",
+      "size": 16,
+      "cols": 12
+    },
+    "dungeon": {
+      "file": "sheets/dungeon.png",
+      "size": 16,
+      "cols": 12
+    },
+    "town": {
+      "file": "sheets/town.png",
+      "size": 16,
+      "cols": 12
+    }
+  },
+  "groups": [
+    {
+      "title": "主角",
+      "sprites": [
+        { "name": "player-green", "sheet": "platformer-characters", "frames": [0, 1], "desc": "绿色宇航员小人，两帧走路动画" },
+        { "name": "player-blue", "sheet": "platformer-characters", "frames": [2, 3], "desc": "蓝色宇航员小人，两帧走路动画" },
+        { "name": "player-pink", "sheet": "platformer-characters", "frames": [4, 5], "desc": "粉色独眼宇航员，两帧走路动画" },
+        { "name": "player-yellow", "sheet": "platformer-characters", "frames": [6, 7], "desc": "黄色宇航员小人，两帧走路动画" },
+        { "name": "player-beige", "sheet": "platformer-characters", "frames": [9, 10], "desc": "米色宇航员小人，两帧走路动画" },
+        { "name": "knight", "sheet": "dungeon", "frames": [96], "desc": "骑士（俯视角）" },
+        { "name": "wizard", "sheet": "dungeon", "frames": [84], "desc": "巫师" },
+        { "name": "viking", "sheet": "dungeon", "frames": [87], "desc": "戴角盔的战士" },
+        { "name": "princess", "sheet": "dungeon", "frames": [99], "desc": "公主" },
+        { "name": "ranger", "sheet": "dungeon", "frames": [112], "desc": "戴绿头巾的猎人" },
+        { "name": "villager", "sheet": "dungeon", "frames": [85], "desc": "村民" },
+        { "name": "ship-blue", "sheet": "shmup-ships", "frames": [0], "desc": "蓝色战机，机头朝上" },
+        { "name": "ship-red", "sheet": "shmup-ships", "frames": [1], "desc": "红色战机，机头朝上" },
+        { "name": "ship-green", "sheet": "shmup-ships", "frames": [2], "desc": "绿色战机，机头朝上" },
+        { "name": "ship-yellow", "sheet": "shmup-ships", "frames": [3], "desc": "黄色战机，机头朝上" },
+        { "name": "plane-blue", "sheet": "shmup-ships", "frames": [4], "desc": "蓝色小飞机，机头朝上" },
+        { "name": "plane-red", "sheet": "shmup-ships", "frames": [5], "desc": "红色小飞机，机头朝上" }
+      ]
+    },
+    {
+      "title": "敌人",
+      "sprites": [
+        { "name": "enemy-spikeball", "sheet": "platformer-characters", "frames": [8], "desc": "灰色刺球" },
+        { "name": "enemy-block", "sheet": "platformer-characters", "frames": [11, 12], "desc": "生气的黄色方块怪，两帧" },
+        { "name": "enemy-critter", "sheet": "platformer-characters", "frames": [13, 14], "desc": "黄色小虫，两帧" },
+        { "name": "enemy-drill", "sheet": "platformer-characters", "frames": [15, 16], "desc": "钻头怪，两帧" },
+        { "name": "enemy-slime", "sheet": "platformer-characters", "frames": [18, 19], "desc": "蓝色爬虫，两帧" },
+        { "name": "enemy-bat", "sheet": "platformer-characters", "frames": [24, 25, 26], "desc": "蝙蝠，三帧扇翅膀" },
+        { "name": "enemy-jet", "sheet": "shmup-ships", "frames": [14], "desc": "灰色大敌机，机头朝上（往下飞时 setFlipY(true)）" },
+        { "name": "enemy-plane", "sheet": "shmup-ships", "frames": [17], "desc": "灰色敌机，机头朝上" },
+        { "name": "enemy-plane-small", "sheet": "shmup-ships", "frames": [22], "desc": "灰色小敌机，机头朝上" },
+        { "name": "monster-ghost", "sheet": "dungeon", "frames": [121], "desc": "幽灵（俯视角）" },
+        { "name": "monster-spider", "sheet": "dungeon", "frames": [122], "desc": "蜘蛛" },
+        { "name": "monster-beast", "sheet": "dungeon", "frames": [123], "desc": "棕色卷尾小怪兽" },
+        { "name": "monster-bat", "sheet": "dungeon", "frames": [120], "desc": "棕色蝙蝠" },
+        { "name": "monster-slime", "sheet": "dungeon", "frames": [108], "desc": "绿色史莱姆" },
+        { "name": "monster-demon", "sheet": "dungeon", "frames": [110], "desc": "红色带角的小恶魔" }
+      ]
+    },
+    {
+      "title": "道具",
+      "sprites": [
+        { "name": "coin", "sheet": "platformer", "frames": [151], "desc": "金币" },
+        { "name": "gem", "sheet": "platformer", "frames": [67], "desc": "蓝宝石" },
+        { "name": "key", "sheet": "platformer", "frames": [27], "desc": "金钥匙" },
+        { "name": "heart", "sheet": "platformer", "frames": [44], "desc": "红心（生命）" },
+        { "name": "heart-half", "sheet": "platformer", "frames": [45], "desc": "半颗心" },
+        { "name": "heart-empty", "sheet": "platformer", "frames": [46], "desc": "空心" },
+        { "name": "flag", "sheet": "platformer", "frames": [111], "desc": "红旗（终点）" },
+        { "name": "spring", "sheet": "platformer", "frames": [108], "desc": "弹簧" },
+        { "name": "spring-pressed", "sheet": "platformer", "frames": [107], "desc": "压下去的弹簧" },
+        { "name": "spikes", "sheet": "platformer", "frames": [68], "desc": "地刺" },
+        { "name": "crate", "sheet": "platformer", "frames": [26], "desc": "木箱" },
+        { "name": "block-coin", "sheet": "platformer", "frames": [11], "desc": "金币砖块" },
+        { "name": "block-lock", "sheet": "platformer", "frames": [10], "desc": "带锁的砖块" },
+        { "name": "block-yellow", "sheet": "platformer", "frames": [9], "desc": "黄色砖块" },
+        { "name": "lever", "sheet": "platformer", "frames": [64], "desc": "拉杆" },
+        { "name": "button", "sheet": "platformer", "frames": [148], "desc": "地上的按钮" },
+        { "name": "bomb", "sheet": "town", "frames": [105], "desc": "黑色炸弹" },
+        { "name": "chest", "sheet": "dungeon", "frames": [89], "desc": "宝箱" },
+        { "name": "potion-red", "sheet": "dungeon", "frames": [115], "desc": "红色药水" },
+        { "name": "potion-blue", "sheet": "dungeon", "frames": [116], "desc": "蓝色药水" },
+        { "name": "potion-green", "sheet": "dungeon", "frames": [114], "desc": "绿色药水" },
+        { "name": "sword", "sheet": "dungeon", "frames": [104], "desc": "剑" },
+        { "name": "axe", "sheet": "dungeon", "frames": [118], "desc": "双刃斧" },
+        { "name": "bullet", "sheet": "shmup-tiles", "frames": [0], "desc": "子弹，竖着的" },
+        { "name": "bullet-double", "sheet": "shmup-tiles", "frames": [1], "desc": "双发子弹" },
+        { "name": "bullet-small", "sheet": "shmup-tiles", "frames": [2], "desc": "细子弹" },
+        { "name": "rocket", "sheet": "shmup-tiles", "frames": [18], "desc": "红色火箭弹" },
+        { "name": "mine", "sheet": "shmup-tiles", "frames": [16], "desc": "地雷 / 障碍" },
+        { "name": "powerup-health", "sheet": "shmup-tiles", "frames": [24], "desc": "加血包" },
+        { "name": "powerup-p", "sheet": "shmup-tiles", "frames": [25], "desc": "P 字强化道具" },
+        { "name": "powerup-shield", "sheet": "shmup-tiles", "frames": [26], "desc": "护盾道具" },
+        { "name": "explosion", "sheet": "shmup-tiles", "frames": [4, 5, 7], "desc": "爆炸，三帧" },
+        { "name": "beehive", "sheet": "town", "frames": [94], "desc": "蜂窝" },
+        { "name": "target", "sheet": "town", "frames": [95], "desc": "靶子" },
+        { "name": "barrel", "sheet": "town", "frames": [130], "desc": "木桶" },
+        { "name": "log", "sheet": "town", "frames": [106], "desc": "木头" }
+      ]
+    },
+    {
+      "title": "食物",
+      "sprites": [
+        { "name": "donut", "sheet": "platformer-food", "frames": [13], "desc": "甜甜圈" },
+        { "name": "donut-pink", "sheet": "platformer-food", "frames": [14], "desc": "粉色糖霜甜甜圈" },
+        { "name": "donut-chocolate", "sheet": "platformer-food", "frames": [15], "desc": "巧克力甜甜圈" },
+        { "name": "burger", "sheet": "platformer-food", "frames": [92], "desc": "汉堡" },
+        { "name": "pizza", "sheet": "platformer-food", "frames": [106], "desc": "一角披萨" },
+        { "name": "cheese", "sheet": "platformer-food", "frames": [105], "desc": "一角奶酪" },
+        { "name": "cookie", "sheet": "platformer-food", "frames": [58], "desc": "饼干" },
+        { "name": "ice-cream", "sheet": "platformer-food", "frames": [107], "desc": "冰淇淋" },
+        { "name": "ice-cream-sprinkles", "sheet": "platformer-food", "frames": [108], "desc": "撒糖粒的冰淇淋" },
+        { "name": "lollipop-red", "sheet": "platformer-food", "frames": [8], "desc": "红色棒棒糖" },
+        { "name": "lollipop-orange", "sheet": "platformer-food", "frames": [9], "desc": "橙色棒棒糖" },
+        { "name": "cotton-candy", "sheet": "platformer-food", "frames": [25], "desc": "粉色棉花糖" },
+        { "name": "candy-cane", "sheet": "platformer-food", "frames": [41], "desc": "拐杖糖" },
+        { "name": "sushi", "sheet": "platformer-food", "frames": [104], "desc": "寿司" }
+      ]
+    },
+    {
+      "title": "装饰",
+      "sprites": [
+        { "name": "tree-pine", "sheet": "platformer", "frames": [126], "desc": "松树" },
+        { "name": "cactus", "sheet": "platformer", "frames": [127], "desc": "仙人掌" },
+        { "name": "mushroom", "sheet": "platformer", "frames": [128], "desc": "红蘑菇" },
+        { "name": "plant", "sheet": "platformer", "frames": [125], "desc": "小草" },
+        { "name": "snowman", "sheet": "platformer", "frames": [145], "desc": "雪人" },
+        { "name": "sign-left", "sheet": "platformer", "frames": [87], "desc": "向左的路牌" },
+        { "name": "sign-right", "sheet": "platformer", "frames": [88], "desc": "向右的路牌" },
+        { "name": "tree", "sheet": "town", "frames": [4], "desc": "绿树（俯视角）" },
+        { "name": "tree-round", "sheet": "town", "frames": [5], "desc": "圆形灌木" },
+        { "name": "tree-orange", "sheet": "town", "frames": [3], "desc": "秋天的橙色树" },
+        { "name": "mushroom-patch", "sheet": "town", "frames": [29], "desc": "一丛小蘑菇" },
+        { "name": "sprout", "sheet": "town", "frames": [17], "desc": "嫩芽" },
+        { "name": "sign", "sheet": "town", "frames": [83], "desc": "木牌" }
+      ]
+    },
+    {
+      "title": "地面和墙（侧视角，跳跃游戏用）",
+      "sprites": [
+        { "name": "grass-block", "sheet": "platformer", "frames": [0], "desc": "单块草地砖" },
+        { "name": "grass-left", "sheet": "platformer", "frames": [1], "desc": "草地平台左端" },
+        { "name": "grass-mid", "sheet": "platformer", "frames": [2], "desc": "草地平台中间" },
+        { "name": "grass-right", "sheet": "platformer", "frames": [3], "desc": "草地平台右端" },
+        { "name": "dirt", "sheet": "platformer", "frames": [122], "desc": "泥土（草地下面填充）" },
+        { "name": "sand-block", "sheet": "platformer", "frames": [40], "desc": "单块沙地砖" },
+        { "name": "sand-left", "sheet": "platformer", "frames": [41], "desc": "沙地平台左端" },
+        { "name": "sand-mid", "sheet": "platformer", "frames": [42], "desc": "沙地平台中间" },
+        { "name": "sand-right", "sheet": "platformer", "frames": [43], "desc": "沙地平台右端" },
+        { "name": "snow-block", "sheet": "platformer", "frames": [80], "desc": "单块雪地砖" },
+        { "name": "snow-left", "sheet": "platformer", "frames": [81], "desc": "雪地平台左端" },
+        { "name": "snow-mid", "sheet": "platformer", "frames": [82], "desc": "雪地平台中间" },
+        { "name": "snow-right", "sheet": "platformer", "frames": [83], "desc": "雪地平台右端" },
+        { "name": "platform-wood", "sheet": "platformer", "frames": [146], "desc": "木板小平台（只有上半格高）" },
+        { "name": "platform-stone", "sheet": "platformer", "frames": [147], "desc": "石板小平台（只有上半格高）" },
+        { "name": "cloud", "sheet": "platformer", "frames": [154], "desc": "云朵平台" },
+        { "name": "ladder", "sheet": "platformer", "frames": [71], "desc": "梯子" },
+        { "name": "water-top", "sheet": "platformer", "frames": [33], "desc": "水面" },
+        { "name": "water", "sheet": "platformer", "frames": [73], "desc": "水（水面下面）" }
+      ]
+    },
+    {
+      "title": "地面和墙（俯视角，迷宫、冒险和射击游戏用）",
+      "sprites": [
+        { "name": "wall", "sheet": "dungeon", "frames": [40], "desc": "灰色石砖墙" },
+        { "name": "door", "sheet": "dungeon", "frames": [45], "desc": "石拱里的木门" },
+        { "name": "fence", "sheet": "town", "frames": [81], "desc": "横着的木栅栏" },
+        { "name": "floor-sand", "sheet": "dungeon", "frames": [48], "desc": "沙色地面" },
+        { "name": "floor-dark", "sheet": "dungeon", "frames": [0], "desc": "深棕色地面" },
+        { "name": "floor-grass", "sheet": "town", "frames": [0], "desc": "草地" },
+        { "name": "floor-flowers", "sheet": "town", "frames": [2], "desc": "开花的草地" },
+        { "name": "floor-stone", "sheet": "town", "frames": [43], "desc": "草地上的石板路" },
+        { "name": "floor-sea", "sheet": "shmup-tiles", "frames": [42], "desc": "浅色水面" },
+        { "name": "floor-meadow", "sheet": "shmup-tiles", "frames": [110], "desc": "黄绿色草原" },
+        { "name": "floor-desert", "sheet": "shmup-tiles", "frames": [116], "desc": "红褐色沙漠" }
+      ]
+    }
+  ],
+  "backgrounds": [
+    { "name": "bg-snow", "sheet": "platformer-backgrounds", "top": 0, "middle": 9, "bottom": 16, "desc": "雪地背景，白色树影" },
+    { "name": "bg-desert", "sheet": "platformer-backgrounds", "top": 4, "middle": 13, "bottom": 20, "desc": "沙漠背景，橙色山丘" },
+    { "name": "bg-forest", "sheet": "platformer-backgrounds", "top": 6, "middle": 15, "bottom": 22, "desc": "森林背景，绿色树林" }
+  ]
+}
