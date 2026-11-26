@@ -355,7 +355,7 @@ CREATE INDEX IF NOT EXISTS game_log_created ON game_log (created);
 | 老师 | `GET /game/admin/reports`、`POST /game/admin/reports/:id/resolve` | 举报列表、处理 |
 | 老师 | `GET /game/admin/log`、`GET /game/admin/summary` | 操作记录；侧栏数字提醒（待处理举报 + 申请数） |
 
-实现时另加了：`GET /game/tags`（标签列表）、`GET /game/:display/workspace`（作者工作台的当前代码）、`GET /game/:display/releases/:version`（某一版的代码）、`GET /game/admin/takedowns`（被下架的游戏，申请重新上架的排前面）。固定标签：跳跃、射击、迷宫、躲避、接东西、益智、冒险、其他，发布时选一到两个。徽章暂时只有老师颁发的“最有创意”“最佳更新”，自动徽章等门槛定了再加。代码在 `server/src/routes/game.ts`，测试在 `server/tests/game.test.ts`。
+实现时另加了：`GET /game/tags`（标签列表）、`GET /game/:display/workspace`（作者工作台的当前代码）、`GET /game/:display/releases/:version`（某一版的代码）、`GET /game/admin/takedowns`（被下架的游戏，申请重新上架的排前面）。固定标签：平台跳跃、射击、迷宫、躲避、接东西、跑酷、益智、冒险、双人、反应、其他，发布时选一到两个。徽章暂时只有老师颁发的“最有创意”“最佳更新”，自动徽章等门槛定了再加。代码在 `server/src/routes/game.ts`，测试在 `server/tests/game.test.ts`。
 
 ### 要改的现有代码
 

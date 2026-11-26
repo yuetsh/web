@@ -28,14 +28,18 @@ import { mediaPath } from "./files"
 // 游戏板块：游戏本体是 tasks 里 task_type = 'game' 的一行（和自由创作一样，对话和版本沿用 messages），
 // 发布、大厅、评分、举报、老师管理用 games / game_* 表。设计见 docs/plans/2026-11-26-game-section-design.md
 
+// key 存在 game_tags 里，只能加不能改；要改叫法只改中文
 export const GAME_TAGS = {
-  jump: "跳跃",
+  jump: "平台跳跃",
   shoot: "射击",
   maze: "迷宫",
   dodge: "躲避",
   catch: "接东西",
+  runner: "跑酷",
   puzzle: "益智",
   adventure: "冒险",
+  duo: "双人",
+  reaction: "反应",
   other: "其他",
 } as const
 type Tag = keyof typeof GAME_TAGS
