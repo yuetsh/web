@@ -102,7 +102,7 @@ const nav = computed(() => [
     active: routeName.value.startsWith("home-challenge"),
   },
   {
-    label: "自由创作",
+    label: "创作",
     to: { name: "creation-list" },
     active: routeName.value.startsWith("creation"),
   },

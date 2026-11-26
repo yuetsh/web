@@ -486,7 +486,7 @@ describe("自由创作", () => {
     const saved = (await me("PUT", `/api/creation/${c.display}/code`, { html: "<p>" })).json
     expect(saved.html).toBe("<p>")
     expect((await me("GET", "/api/creation/mine")).json[0].has_code).toBe(true)
-    expect((await me("POST", "/api/submission", { task_id: c.task_id })).json.detail).toBe("自由创作不需要提交")
+    expect((await me("POST", "/api/submission", { task_id: c.task_id })).json.detail).toBe("创作不需要提交")
   })
 })
 

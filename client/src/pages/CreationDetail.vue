@@ -3,7 +3,7 @@
     ref="wb"
     kind="creation"
     :task-id="taskId"
-    :title="title || '自由创作'"
+    :title="title || '创作'"
     back-label="返回我的创作"
     :back-to="{ name: 'creation-list' }"
     brief-label="我的主题"
@@ -45,7 +45,7 @@
           </n-button>
         </n-flex>
         <n-text depth="3" class="hint">
-          自由创作只属于你自己，不会进入提交记录和评分。
+          创作只属于你自己，不会进入提交记录和评分。
         </n-text>
       </div>
     </template>

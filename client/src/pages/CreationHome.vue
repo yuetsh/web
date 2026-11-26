@@ -2,7 +2,7 @@
   <main class="creation-home">
     <header class="head">
       <div>
-        <h2>自由创作</h2>
+        <h2>创作</h2>
         <p class="sub">自己定一个主题，和 AI 一起把它做出来。不用交，也不打分</p>
       </div>
       <n-button type="primary" @click="openCreate()">
