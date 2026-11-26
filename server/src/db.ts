@@ -156,6 +156,132 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS messages_chain ON messages (conversation_id, created, id, role, source, prompt_level);
 CREATE UNIQUE INDEX IF NOT EXISTS messages_submission ON messages (submission_id) WHERE submission_id IS NOT NULL;
 
+-- ── 游戏 ──
+-- 游戏本体是 tasks 里 task_type = 'game' 的一行（owner_id 是作者，html/css/js 是工作台里的当前代码），
+-- 对话和版本沿用 conversations / messages；下面是游戏特有的东西，都随 tasks 级联删除
+
+-- 和 tasks 一对一；大厅列表只扫这张小表，统计在写评分 / 游玩时顺手更新
+CREATE TABLE IF NOT EXISTS games (
+  task_id INTEGER PRIMARY KEY REFERENCES tasks (id) ON DELETE CASCADE,
+  -- draft（没发布过）/ listed（在大厅）/ taken_down（被老师下架）
+  status TEXT NOT NULL DEFAULT 'draft',
+  latest_version INTEGER NOT NULL DEFAULT 0,
+  first_published TEXT,
+  last_published TEXT,
+  play_count INTEGER NOT NULL DEFAULT 0,
+  -- 最新版的评分
+  rating_sum INTEGER NOT NULL DEFAULT 0,
+  rating_count INTEGER NOT NULL DEFAULT 0,
+  featured_at TEXT,
+  replay_public INTEGER NOT NULL DEFAULT 0,
+  takedown_reason TEXT,
+  appeal_at TEXT,
+  cover TEXT
+);
+CREATE INDEX IF NOT EXISTS games_status ON games (status, last_published);
+CREATE INDEX IF NOT EXISTS games_featured ON games (featured_at) WHERE featured_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS game_tags (
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  tag TEXT NOT NULL,
+  PRIMARY KEY (task_id, tag)
+);
+CREATE INDEX IF NOT EXISTS game_tags_tag ON game_tags (tag, task_id);
+
+-- 每次发布一行；代码在 game_release_code，扫版本列表时不读代码
+CREATE TABLE IF NOT EXISTS game_releases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  -- 发布的是哪条 AI 回复；消息删了不影响已发布的代码
+  message_id INTEGER REFERENCES messages (id) ON DELETE SET NULL,
+  rating_sum INTEGER NOT NULL DEFAULT 0,
+  rating_count INTEGER NOT NULL DEFAULT 0,
+  created TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  UNIQUE (task_id, version)
+);
+CREATE INDEX IF NOT EXISTS game_releases_message ON game_releases (message_id) WHERE message_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS game_release_code (
+  release_id INTEGER PRIMARY KEY REFERENCES game_releases (id) ON DELETE CASCADE,
+  html TEXT,
+  css TEXT,
+  js TEXT
+);
+
+-- 玩满 30 秒记一次，每人每个游戏一行；周榜 / 月榜按 first_played 数新增玩家
+CREATE TABLE IF NOT EXISTS game_plays (
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  first_played TEXT NOT NULL,
+  last_played TEXT NOT NULL,
+  PRIMARY KEY (task_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS game_plays_user ON game_plays (user_id);
+CREATE INDEX IF NOT EXISTS game_plays_first ON game_plays (first_played, task_id);
+
+-- 每人每版一条，可以改；老师删留言只清 comment，星级保留
+CREATE TABLE IF NOT EXISTS game_ratings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  release_id INTEGER NOT NULL REFERENCES game_releases (id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  stars INTEGER NOT NULL,
+  helpful_count INTEGER NOT NULL DEFAULT 0,
+  created TEXT NOT NULL,
+  modified TEXT NOT NULL,
+  comment TEXT,
+  UNIQUE (user_id, release_id)
+);
+CREATE INDEX IF NOT EXISTS game_ratings_release ON game_ratings (release_id);
+CREATE TABLE IF NOT EXISTS game_rating_helpful (
+  rating_id INTEGER NOT NULL REFERENCES game_ratings (id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  PRIMARY KEY (rating_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS game_rating_helpful_user ON game_rating_helpful (user_id);
+
+CREATE TABLE IF NOT EXISTS game_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  created TEXT NOT NULL,
+  resolved_at TEXT,
+  resolved_by INTEGER REFERENCES users (id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS game_reports_task ON game_reports (task_id);
+CREATE INDEX IF NOT EXISTS game_reports_user ON game_reports (user_id);
+CREATE INDEX IF NOT EXISTS game_reports_resolver ON game_reports (resolved_by) WHERE resolved_by IS NOT NULL;
+CREATE INDEX IF NOT EXISTS game_reports_pending ON game_reports (created) WHERE resolved_at IS NULL;
+
+-- 徽章：自动发的 awarded_by 为 NULL；玩家徽章没有 task_id
+CREATE TABLE IF NOT EXISTS game_badges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  task_id INTEGER REFERENCES tasks (id) ON DELETE CASCADE,
+  badge TEXT NOT NULL,
+  awarded_by INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS game_badges_user ON game_badges (user_id);
+CREATE INDEX IF NOT EXISTS game_badges_task ON game_badges (task_id) WHERE task_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS game_badges_awarder ON game_badges (awarded_by) WHERE awarded_by IS NOT NULL;
+
+-- 老师的操作记录。游戏删了记录要留着，所以 task_id 是 SET NULL，另存一份标题
+CREATE TABLE IF NOT EXISTS game_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER REFERENCES tasks (id) ON DELETE SET NULL,
+  actor_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  -- take_down / restore / delete_comment / feature / unfeature / award_badge / dismiss_report
+  action TEXT NOT NULL,
+  game_title TEXT NOT NULL,
+  created TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS game_log_task ON game_log (task_id) WHERE task_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS game_log_actor ON game_log (actor_id) WHERE actor_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS game_log_created ON game_log (created);
+
 -- 登录用 JWT：access token 不落库，refresh token 只存 sha256
 CREATE TABLE IF NOT EXISTS refresh_tokens (
   token_hash TEXT PRIMARY KEY,

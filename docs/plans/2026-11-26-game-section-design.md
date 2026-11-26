@@ -175,6 +175,182 @@ AI 只写代码、产不出图片和声音，所以素材有三个来源，都�
 - 拆代码时容忍没闭合的 `<script>`：现在服务器 `services/llm.ts` 和前端 `utils/code.ts` 的正则都要求有 `</script>`，对现有挑战也是隐患
 - 预览把运行报错传给外层页面，学生点一下就能把报错发给 AI 修；学生不看代码，AI 自己修错是关键
 
+## 数据库与接口
+
+游戏本身沿用自由创作的做法：`tasks` 里 `task_type = 'game'` 的一行，`owner_id` 是作者，`html / css / js` 是工作台里的当前代码，`display` 是网址序号（`/game/:display`）。这样 AI 对话、版本条、手改和粘贴（`conversations` / `messages`）、工作台全都直接复用。发布、评分、举报这些游戏特有的东西放新表，不碰 `submissions` / `ratings`，成绩册、批改墙、评分算法都不受影响。
+
+也考虑过把游戏本体单独放一张表：对话表 `conversations.task_id` 是 NOT NULL 且指向 `tasks`，那样要么重建对话表、迁移生产库，要么复制一整套对话代码，所以不采用。
+
+只新增表、不改旧表，所以不用升 `SCHEMA_VERSION`。
+
+### 新表
+
+```sql
+-- 游戏的额外信息，和 tasks 一对一（不往 tasks 加列，免得改旧表）
+CREATE TABLE IF NOT EXISTS games (
+  task_id INTEGER PRIMARY KEY REFERENCES tasks (id) ON DELETE CASCADE,
+  -- draft（没发布过）/ listed（在大厅）/ taken_down（被老师下架）
+  status TEXT NOT NULL DEFAULT 'draft',
+  latest_version INTEGER NOT NULL DEFAULT 0,
+  first_published TEXT,
+  last_published TEXT,
+  -- 大厅列表要的统计，写评分 / 游玩时顺手更新，列表不用现算
+  play_count INTEGER NOT NULL DEFAULT 0,
+  rating_sum INTEGER NOT NULL DEFAULT 0,      -- 最新版的
+  rating_count INTEGER NOT NULL DEFAULT 0,
+  featured_at TEXT,                           -- 老师推荐；NULL = 没推荐
+  replay_public INTEGER NOT NULL DEFAULT 0,   -- 成长回放公开给同学
+  takedown_reason TEXT,
+  appeal_at TEXT,                             -- 作者申请重新上架的时间
+  cover TEXT                                  -- media/ 下的封面路径
+);
+CREATE INDEX IF NOT EXISTS games_status ON games (status, last_published);
+CREATE INDEX IF NOT EXISTS games_featured ON games (featured_at) WHERE featured_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS game_tags (
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  tag TEXT NOT NULL,
+  PRIMARY KEY (task_id, tag)
+);
+CREATE INDEX IF NOT EXISTS game_tags_tag ON game_tags (tag, task_id);
+
+-- 每次发布一行；代码另放一张表，列表扫这张表时不读代码
+CREATE TABLE IF NOT EXISTS game_releases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  -- 发布的是哪条 AI 回复；那条消息被删了也不影响已发布的代码
+  message_id INTEGER REFERENCES messages (id) ON DELETE SET NULL,
+  rating_sum INTEGER NOT NULL DEFAULT 0,
+  rating_count INTEGER NOT NULL DEFAULT 0,
+  created TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',             -- 更新说明
+  UNIQUE (task_id, version)
+);
+CREATE INDEX IF NOT EXISTS game_releases_message ON game_releases (message_id) WHERE message_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS game_release_code (
+  release_id INTEGER PRIMARY KEY REFERENCES game_releases (id) ON DELETE CASCADE,
+  html TEXT, css TEXT, js TEXT
+);
+
+-- 玩过的人：玩满 30 秒记一次，每人每个游戏一行；周榜 / 月榜按 first_played 算新增玩家
+CREATE TABLE IF NOT EXISTS game_plays (
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  first_played TEXT NOT NULL,
+  last_played TEXT NOT NULL,
+  PRIMARY KEY (task_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS game_plays_user ON game_plays (user_id);
+CREATE INDEX IF NOT EXISTS game_plays_first ON game_plays (first_played, task_id);
+
+-- 打分和一句话；每人每版一条，可以改。老师删留言只清 comment，星级保留
+CREATE TABLE IF NOT EXISTS game_ratings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  release_id INTEGER NOT NULL REFERENCES game_releases (id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  stars INTEGER NOT NULL,
+  helpful_count INTEGER NOT NULL DEFAULT 0,
+  created TEXT NOT NULL,
+  modified TEXT NOT NULL,
+  comment TEXT,
+  UNIQUE (user_id, release_id)
+);
+CREATE INDEX IF NOT EXISTS game_ratings_release ON game_ratings (release_id);
+CREATE TABLE IF NOT EXISTS game_rating_helpful (
+  rating_id INTEGER NOT NULL REFERENCES game_ratings (id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  PRIMARY KEY (rating_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS game_rating_helpful_user ON game_rating_helpful (user_id);
+
+CREATE TABLE IF NOT EXISTS game_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  created TEXT NOT NULL,
+  resolved_at TEXT,
+  resolved_by INTEGER REFERENCES users (id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS game_reports_task ON game_reports (task_id);
+CREATE INDEX IF NOT EXISTS game_reports_user ON game_reports (user_id);
+CREATE INDEX IF NOT EXISTS game_reports_resolver ON game_reports (resolved_by) WHERE resolved_by IS NOT NULL;
+CREATE INDEX IF NOT EXISTS game_reports_pending ON game_reports (created) WHERE resolved_at IS NULL;
+
+-- 徽章：自动发的 awarded_by 为 NULL；门槛待定
+CREATE TABLE IF NOT EXISTS game_badges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  task_id INTEGER REFERENCES tasks (id) ON DELETE CASCADE,   -- 玩家徽章没有游戏
+  badge TEXT NOT NULL,
+  awarded_by INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  created TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS game_badges_user ON game_badges (user_id);
+CREATE INDEX IF NOT EXISTS game_badges_task ON game_badges (task_id) WHERE task_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS game_badges_awarder ON game_badges (awarded_by) WHERE awarded_by IS NOT NULL;
+
+-- 老师的操作记录。游戏删了记录要留着，所以 task_id 是 SET NULL，另存一份标题
+CREATE TABLE IF NOT EXISTS game_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER REFERENCES tasks (id) ON DELETE SET NULL,
+  actor_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  -- take_down / restore / delete_comment / feature / unfeature / award_badge / dismiss_report
+  action TEXT NOT NULL,
+  game_title TEXT NOT NULL,
+  created TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS game_log_task ON game_log (task_id) WHERE task_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS game_log_actor ON game_log (actor_id) WHERE actor_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS game_log_created ON game_log (created);
+```
+
+要点：
+
+- 大厅列表只扫 `games`（小列），代码、留言都在别的表；热门、新上架、最近更新、好评都在 `games` 上排序
+- 周榜 / 月榜 = 这段时间里新增的玩家数，走 `game_plays_first` 索引
+- 游玩次数靠前端计时，玩满 30 秒才上报；服务器无法验证，课堂场景够用
+- 留言列表只显示名字和留言，不显示每个人的星级；星级只出现在汇总分里，老师能看到每个人打了几星
+
+### 接口（挂在 `/api/game`）
+
+| 谁 | 接口 | 说明 |
+| --- | --- | --- |
+| 作者 | `GET /game/mine` | 我的游戏：状态、最新版本、分数、游玩人数 |
+| 作者 | `POST /game` | 新建（标题） |
+| 作者 | `PUT /game/:display`、`PUT /game/:display/code`、`DELETE /game/:display` | 改标题简介、存工作台代码、删除，同自由创作 |
+| 作者 | `POST /game/:display/releases` | 发布：`message_id`（发布哪一版）、`notes`、`tags`；版本号自动 +1；被下架时发布不会自动上架 |
+| 作者 | `POST /game/:display/notes-draft` | AI 根据上次发布以来的“做了什么”起草更新说明 |
+| 作者 | `PUT /game/:display/cover` | 上传封面（预览自动截图，或学生自己换） |
+| 作者 | `PUT /game/:display/replay` | 成长回放是否公开 |
+| 作者 | `POST /game/:display/appeal` | 申请重新上架 |
+| 所有人 | `GET /game/hall` | 大厅：`section` = featured / hot / new / updated / top / random，可按 `tag` 筛选，分页 |
+| 所有人 | `GET /game/leaderboard` | 周榜 / 月榜 |
+| 所有人 | `GET /game/:display` | 游戏页：最新版代码、作者、标签、分数、历代版本和更新说明 |
+| 所有人 | `GET /game/:display/ratings` | 留言（分页） |
+| 所有人 | `GET /game/:display/replay` | 成长回放（作者、老师；公开后所有人） |
+| 玩家 | `POST /game/:display/play` | 玩满 30 秒时上报 |
+| 玩家 | `PUT /game/:display/rating` | 给最新版打分、写一句话；要玩过，不能给自己打 |
+| 玩家 | `POST /game/ratings/:id/helpful` | 点 / 取消“有用” |
+| 玩家 | `POST /game/:display/report` | 举报 |
+| 老师 | `POST /game/:display/takedown`、`/restore` | 下架（要原因）、恢复 |
+| 老师 | `DELETE /game/ratings/:id/comment` | 删留言 |
+| 老师 | `PUT /game/:display/featured`、`POST /game/:display/badges` | 推荐、颁发徽章 |
+| 老师 | `GET /game/admin/reports`、`POST /game/admin/reports/:id/resolve` | 举报列表、处理 |
+| 老师 | `GET /game/admin/log`、`GET /game/admin/summary` | 操作记录；侧栏数字提醒（待处理举报 + 申请数） |
+
+实现时另加了：`GET /game/tags`（标签列表）、`GET /game/:display/workspace`（作者工作台的当前代码）、`GET /game/:display/releases/:version`（某一版的代码）、`GET /game/admin/takedowns`（被下架的游戏，申请重新上架的排前面）。固定标签：跳跃、射击、迷宫、躲避、接东西、益智、冒险、其他，发布时选一到两个。徽章暂时只有老师颁发的“最有创意”“最佳更新”，自动徽章等门槛定了再加。代码在 `server/src/routes/game.ts`，测试在 `server/tests/game.test.ts`。
+
+### 要改的现有代码
+
+- `services/prompt.ts` 的 `canAccessTask`：游戏和自由创作一样，只有作者（和超管）能和 AI 对话
+- 老师看过程：提示词记录的读取接口要放开给老师（admin + super）读游戏的对话，现在自由创作只有超管能看
+- `ws.ts` / `services/llm.ts`：`task_type = 'game'` 时用游戏版提示词，附上素材清单
+- `client/src/utils/previewDocument.ts`：游戏预览注入 Phaser、素材和辅助代码
+- `services/cascade.ts`：删游戏走 `deleteTask`，新表都随 `tasks` 级联删除
+
 ## 待验证与下一步
 
 小测试和素材挑选都已做完，下一步是设计数据库和接口。

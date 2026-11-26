@@ -132,6 +132,7 @@ router.post("/", async (c) => {
     }),
   )
   if (task.task_type === "creation") throw new HttpError(400, "自由创作不需要提交")
+  if (task.task_type === "game") throw new HttpError(400, "游戏用发布，不用提交")
 
   const code = { html: p.html ?? null, css: p.css ?? null, js: p.js ?? null }
 

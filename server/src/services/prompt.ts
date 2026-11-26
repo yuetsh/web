@@ -16,10 +16,10 @@ export interface MessageRow {
   submission_id: string | null
 }
 
-// 自由创作只有创作者本人（和超管）能对话，其他任务对所有登录用户开放
+// 自由创作和游戏只有作者本人（和超管）能对话，其他任务对所有登录用户开放
 export function canAccessTask(user: User, taskId: number) {
   const row = get<{ owner_id: number }>(
-    `SELECT owner_id FROM tasks WHERE id = $id AND task_type = 'creation'`,
+    `SELECT owner_id FROM tasks WHERE id = $id AND task_type IN ('creation', 'game')`,
     { id: taskId },
   )
   if (!row) return true

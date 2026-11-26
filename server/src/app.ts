@@ -8,6 +8,7 @@ import { tutorial, challenge, creation } from "./routes/tasks"
 import { assets, upload } from "./routes/files"
 import submission from "./routes/submission"
 import prompt from "./routes/prompt"
+import { game } from "./routes/game"
 import { mediaPath } from "./routes/files"
 
 // strict: false —— 结尾带斜杠也能匹配。前端已统一不带斜杠，留着是为了部署时还开着旧页面的浏览器
@@ -27,6 +28,7 @@ api.route("/submission", submission)
 api.route("/upload", upload)
 api.route("/assets", assets)
 api.route("/prompt", prompt)
+api.route("/game", game)
 app.route("/api", api)
 
 // 生产环境由 Caddy 直接提供 /media，这里主要给本地开发用
