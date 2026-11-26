@@ -31,6 +31,7 @@
           </div>
         </div>
         <PromptPanel
+          ref="promptPanel"
           class="chat"
           :before-send="beforeSend"
           :rating="kind === 'challenge'"
@@ -43,6 +44,10 @@
         <div class="right-body">
           <div v-if="mode === 'preview'" class="preview-only">
             <Preview
+              ref="preview"
+              :game="kind === 'game'"
+              @game-message="onGameMessage"
+              @reloaded="gameIssues = []"
               :html="code.html"
               :css="code.css"
               :js="code.js"
@@ -78,6 +83,10 @@
             <template #2>
               <div class="preview-only">
                 <Preview
+                  ref="preview"
+                  :game="kind === 'game'"
+                  @game-message="onGameMessage"
+                  @reloaded="gameIssues = []"
                   :html="code.html"
                   :css="code.css"
                   :js="code.js"
@@ -87,6 +96,17 @@
               </div>
             </template>
           </n-split>
+        </div>
+        <div v-if="gameIssues.length" class="game-issues" role="alert">
+          <Icon icon="lucide:bug" :width="15" class="issue-icon" />
+          <span class="issue-text">
+            {{ gameIssues[0]!.type === "error" ? "游戏出错了" : "提示" }}：{{ gameIssues[0]!.message }}
+            <template v-if="gameIssues.length > 1">（还有 {{ gameIssues.length - 1 }} 条）</template>
+          </span>
+          <n-button size="tiny" type="warning" :disabled="streaming" @click="reportIssues">
+            发给 AI 修
+          </n-button>
+          <n-button size="tiny" quaternary @click="gameIssues = []">忽略</n-button>
         </div>
         <VersionBar
           :kind="kind"
@@ -123,7 +143,7 @@
   </n-drawer>
 </template>
 <script lang="ts" setup>
-import { computed, h, onUnmounted, ref, toRef, watch } from "vue"
+import { computed, h, onUnmounted, ref, toRef, useTemplateRef, watch } from "vue"
 import { useStorage } from "@vueuse/core"
 import type { RouteLocationRaw } from "vue-router"
 import { NCode, useDialog, useMessage } from "naive-ui"
@@ -146,6 +166,7 @@ import {
   removeMessagePair,
   sendPrompt,
   setCodeSink,
+  streaming,
 } from "../../store/prompt"
 import { closeGuidance } from "../../store/guidance"
 import { authed } from "../../store/user"
@@ -157,10 +178,11 @@ import {
   type Code,
 } from "../../utils/code"
 
-// 挑战和自由创作共用的工作台：左边题目 + AI 对话，右边预览 / 代码，底部是版本条。
-// 每轮 AI 回复、每次手改或粘贴外部代码都是一个版本；挑战由学生自己点“交这一版”提交
+// 挑战、自由创作和游戏共用的工作台：左边题目 + AI 对话，右边预览 / 代码，底部是版本条。
+// 每轮 AI 回复、每次手改或粘贴外部代码都是一个版本；挑战由学生自己点“交这一版”提交，
+// 游戏点“发布这一版”（页面弹框填更新说明，见 GameWorkbench.vue）
 const props = defineProps<{
-  kind: "challenge" | "creation"
+  kind: "challenge" | "creation" | "game"
   // 任务还没加载完时是 0
   taskId: number
   title: string
@@ -168,8 +190,11 @@ const props = defineProps<{
   backTo: RouteLocationRaw
   briefLabel?: string
   assetBaseUrl?: string
-  // 自由创作：保存作品（AI 生成完也会自动保存）
+  // 自由创作和游戏：保存作品（AI 生成完也会自动保存）
   saveWork?: (code: Code) => Promise<void>
+  // 游戏：发布某一版（当前修改会先存成版本）；releasedIds 是发布过的版本，在版本条上打勾
+  publish?: (messageId: number) => void
+  releasedIds?: number[]
 }>()
 
 const message = useMessage()
@@ -203,7 +228,7 @@ const versions = computed<VersionItem[]>(() =>
     id: m.id!,
     n: i + 1,
     source: m.source ?? "conversation",
-    submitted: !!m.submitted,
+    submitted: !!m.submitted || !!props.releasedIds?.includes(m.id!),
   })),
 )
 
@@ -234,7 +259,7 @@ function onCode(c: CodeOut, id: number, reason: "init" | "complete") {
   }
   Object.assign(code, normalize(c))
   selectedId.value = id
-  if (reason === "complete" && props.kind === "creation") {
+  if (reason === "complete" && props.kind !== "challenge") {
     props.saveWork?.({ ...code }).catch(() => {})
   }
 }
@@ -320,6 +345,19 @@ async function submit() {
     showSubmit.value = true
     return
   }
+  if (props.kind === "game") {
+    busy.value = true
+    try {
+      const id =
+        modified.value || !selectedId.value ? await saveAsVersion() : selectedId.value
+      props.publish?.(id)
+    } catch (err: any) {
+      message.error(err.response?.data?.detail ?? "保存这一版失败，请重试")
+    } finally {
+      busy.value = false
+    }
+    return
+  }
   busy.value = true
   try {
     await props.saveWork?.({ ...code })
@@ -399,6 +437,51 @@ function clear() {
 // 和 PromptPanel 里的模型选择是同一个存储
 const model = useStorage("prompt-model", "deepseek-flash")
 
+// ── 游戏：预览里的报错、封面 ──
+
+type GameMessage = { type: string; message?: string; dataUrl?: string }
+const promptPanel = useTemplateRef<{ fill: (text: string) => void }>("promptPanel")
+const preview = useTemplateRef<{ postToGame: (type: string) => void }>("preview")
+const gameIssues = ref<{ type: string; message: string }[]>([])
+// 游戏开始后自动截的封面；发布时用
+const latestCover = ref("")
+let snapshotWaiter: ((dataUrl: string) => void) | null = null
+
+function onGameMessage(msg: GameMessage) {
+  if ((msg.type === "error" || msg.type === "warning") && msg.message) {
+    gameIssues.value.push({ type: msg.type, message: msg.message })
+  } else if (msg.type === "cover" && msg.dataUrl) {
+    latestCover.value = msg.dataUrl
+  } else if (msg.type === "snapshot" && msg.dataUrl) {
+    latestCover.value = msg.dataUrl
+    snapshotWaiter?.(msg.dataUrl)
+    snapshotWaiter = null
+  }
+}
+
+// 报错填进输入框，学生可以补一句“我做了什么”再发
+function reportIssues() {
+  const lines = gameIssues.value.map(
+    (i, n) => `${n + 1}. ${i.type === "error" ? "报错" : "提示"}：${i.message}`,
+  )
+  promptPanel.value?.fill(`游戏运行时出了问题：\n${lines.join("\n")}\n请帮我修好。`)
+  gameIssues.value = []
+}
+
+// 要一张当前画面（游戏没开始就拿不到，3 秒后放弃）
+function requestSnapshot(): Promise<string> {
+  return new Promise((resolve) => {
+    snapshotWaiter = resolve
+    preview.value?.postToGame("snapshot")
+    setTimeout(() => {
+      if (snapshotWaiter === resolve) {
+        snapshotWaiter = null
+        resolve("")
+      }
+    }, 3000)
+  })
+}
+
 defineExpose({
   // 页面自己发提示词（自由创作的“用这个主题生成”）
   async send(text: string) {
@@ -411,6 +494,8 @@ defineExpose({
     selectedId.value = matchVersion()
   },
   restored,
+  latestCover,
+  requestSnapshot,
 })
 </script>
 <style scoped>
@@ -503,5 +588,29 @@ defineExpose({
 
 .mode {
   margin: 0 8px;
+}
+
+.game-issues {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--wp-line);
+  background: var(--wp-warn-soft);
+  font-size: 13px;
+}
+
+.issue-icon {
+  flex: none;
+  color: var(--wp-warn);
+}
+
+.issue-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

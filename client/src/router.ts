@@ -70,6 +70,30 @@ const routes: RouteRecordRaw[] = [
     meta: { auth: true },
   },
   {
+    path: "/game",
+    name: "game-home",
+    component: () => import("./pages/GameHome.vue"),
+    meta: { auth: true },
+  },
+  {
+    path: "/game/mine",
+    name: "game-mine",
+    component: () => import("./pages/GameMine.vue"),
+    meta: { auth: true },
+  },
+  {
+    path: "/game/:display(\\d+)",
+    name: "game",
+    component: () => import("./pages/GamePlay.vue"),
+    meta: { auth: true },
+  },
+  {
+    path: "/game/:display(\\d+)/edit",
+    name: "game-edit",
+    component: () => import("./pages/GameWorkbench.vue"),
+    meta: { auth: true },
+  },
+  {
     path: "/showcase",
     name: "showcase",
     component: () => import("./pages/Showcase.vue"),
@@ -99,6 +123,11 @@ const routes: RouteRecordRaw[] = [
         name: "user-manage",
         component: () => import("./pages/UserManage.vue"),
         meta: { role: "super" },
+      },
+      {
+        path: "games",
+        name: "game-manage",
+        component: () => import("./pages/GameManage.vue"),
       },
       {
         path: "showcase",

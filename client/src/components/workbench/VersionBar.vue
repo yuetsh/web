@@ -22,7 +22,7 @@
       <span v-if="modified" class="chip on draft">当前修改</span>
     </div>
     <n-button quaternary size="small" @click="emit('history')">全部历史</n-button>
-    <template v-if="kind === 'challenge'">
+    <template v-if="kind === 'challenge' || kind === 'game'">
       <span v-if="submittedLabel" class="hint">{{ submittedLabel }}</span>
       <n-button
         type="primary"
@@ -31,7 +31,7 @@
         :loading="busy"
         @click="emit('submit')"
       >
-        {{ modified ? "交当前修改" : selectedSubmitted ? "已交这一版" : "交这一版" }}
+        {{ modified ? `${verb}当前修改` : selectedSubmitted ? `已${verb}这一版` : `${verb}这一版` }}
       </n-button>
     </template>
     <n-button
@@ -58,7 +58,7 @@ export interface VersionItem {
 }
 
 const props = defineProps<{
-  kind: "challenge" | "creation"
+  kind: "challenge" | "creation" | "game"
   versions: VersionItem[]
   selectedId: number | null
   modified: boolean
@@ -66,6 +66,9 @@ const props = defineProps<{
   busy: boolean
 }>()
 const emit = defineEmits<{ select: [id: number]; submit: []; history: [] }>()
+
+// 挑战是“交”，游戏是“发布”；VersionItem.submitted 对游戏来说是发布过
+const verb = computed(() => (props.kind === "game" ? "发布" : "交"))
 
 const selectedSubmitted = computed(
   () =>
@@ -75,14 +78,15 @@ const selectedSubmitted = computed(
 
 const submittedLabel = computed(() => {
   const done = props.versions.filter((v) => v.submitted).map((v) => `v${v.n}`)
-  if (done.length > 3) return `已交 ${done.length} 个版本`
-  return done.length ? `已交 ${done.join("、")}` : ""
+  if (done.length > 3) return `已${verb.value} ${done.length} 个版本`
+  return done.length ? `已${verb.value} ${done.join("、")}` : ""
 })
 
 function describe(v: VersionItem) {
   const from =
     v.source === "edit" ? "你手改的" : v.source === "manual" ? "外部 AI 生成的" : "AI 生成的"
-  return `${from}第 ${v.n} 版${v.submitted ? "，已提交" : ""}，点击查看`
+  const done = props.kind === "game" ? "，已发布" : "，已提交"
+  return `${from}第 ${v.n} 版${v.submitted ? done : ""}，点击查看`
 }
 </script>
 <style scoped>

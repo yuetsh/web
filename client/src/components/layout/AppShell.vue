@@ -107,6 +107,11 @@ const nav = computed(() => [
     active: routeName.value.startsWith("creation"),
   },
   {
+    label: "游戏",
+    to: { name: "game-home" },
+    active: routeName.value.startsWith("game") && routeName.value !== "game-manage",
+  },
+  {
     label: "作品展",
     to: { name: "showcase" },
     active: routeName.value === "showcase",

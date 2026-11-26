@@ -112,6 +112,7 @@
           :size="8"
         >
           <n-input
+            ref="inputBox"
             v-model:value="input"
             type="textarea"
             :autosize="{ minRows: 1, maxRows: 4 }"
@@ -207,7 +208,16 @@ const props = defineProps<{
 const emit = defineEmits<{ deleted: [] }>()
 
 const input = ref("")
+const inputBox = ref<{ focus: () => void } | null>(null)
 const messagesRef = ref<HTMLElement>()
+
+// 工作台往输入框里填一段话（游戏报错），学生可以补充后再发
+defineExpose({
+  fill(text: string) {
+    input.value = text
+    inputBox.value?.focus()
+  },
+})
 const naiveMessage = useMessage()
 
 const modelOptions = [

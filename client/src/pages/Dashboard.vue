@@ -11,6 +11,7 @@
         >
           <Icon :icon="item.icon" :width="16" />
           <span>{{ item.label }}</span>
+          <span v-if="'badge' in item && item.badge" class="badge">{{ item.badge }}</span>
         </router-link>
       </template>
     </nav>
@@ -20,10 +21,13 @@
   </div>
 </template>
 <script lang="ts" setup>
-import { computed } from "vue"
+import { computed, onMounted } from "vue"
 import { Icon } from "../icons"
 import { step } from "../store/tutorial"
 import { roleSuper } from "../store/user"
+import { gameSummary, refreshGameSummary } from "../store/gameSummary"
+
+onMounted(refreshGameSummary)
 
 // admin 只能出挑战、看提交、管作品展；其余是超管的（和后端权限一致）
 const groups = computed(() =>
@@ -78,6 +82,15 @@ const groups = computed(() =>
       label: "管理",
       items: [
         {
+          label: "游戏",
+          icon: "lucide:gamepad-2",
+          route: { name: "game-manage" },
+          names: ["game-manage"],
+          show: true,
+          // 待处理的举报和申请重新上架的数量
+          badge: gameSummary.pending_reports + gameSummary.appeals || 0,
+        },
+        {
           label: "作品展",
           icon: "lucide:award",
           route: { name: "showcase-manage" },
@@ -114,6 +127,18 @@ const groups = computed(() =>
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
+}
+
+.badge {
+  margin-left: auto;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--wp-bad);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
 }
 
 .group-label {

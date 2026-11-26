@@ -488,6 +488,11 @@ function workspaceOut(g: GameRow) {
     appeal_at: g.appeal_at,
     created: g.created,
     modified: g.modified,
+    // 版本条上标出哪几版发布过
+    releases: all<{ version: number; message_id: number | null }>(
+      `SELECT version, message_id FROM game_releases WHERE task_id = $id ORDER BY version`,
+      { id: g.id },
+    ),
   }
 }
 

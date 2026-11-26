@@ -426,3 +426,135 @@ export interface PeerWorks {
   locked: boolean
   items: PeerWork[]
 }
+
+// ── 游戏 ──
+
+export type GameStatus = "draft" | "listed" | "taken_down"
+
+export interface GameTag {
+  key: string
+  label: string
+}
+
+export interface GameCode {
+  html: string | null
+  css: string | null
+  js: string | null
+}
+
+// 大厅卡片
+export interface GameCard {
+  display: number
+  title: string
+  author: string
+  cover: string | null
+  tags: string[]
+  latest_version: number
+  // 评分人数不到 3 个时是 null（作者和老师除外）
+  rating: number | null
+  rating_count: number
+  play_count: number
+  last_published: string | null
+  featured: boolean
+}
+
+export interface MyGame extends GameCard {
+  status: GameStatus
+  takedown_reason: string | null
+  appeal_at: string | null
+  modified: string
+}
+
+export interface GameLeaderItem extends GameCard {
+  rank: number
+  new_players: number
+}
+
+export interface GameTakedown extends GameCard {
+  takedown_reason: string | null
+  appeal_at: string | null
+}
+
+export interface GameWorkspace {
+  task_id: number
+  display: number
+  title: string
+  content: string
+  html: string
+  css: string
+  js: string
+  status: GameStatus
+  latest_version: number
+  tags: string[]
+  cover: string | null
+  replay_public: boolean
+  takedown_reason: string | null
+  appeal_at: string | null
+  created: string
+  modified: string
+  releases: { version: number; message_id: number | null }[]
+}
+
+export interface GameRelease {
+  version: number
+  notes: string
+  created: string
+  rating: number | null
+  rating_count: number
+}
+
+export interface GameDetail extends GameCard {
+  task_id: number
+  content: string
+  status: GameStatus
+  is_owner: boolean
+  replay_public: boolean
+  takedown_reason: string | null
+  appeal_at: string | null
+  releases: GameRelease[]
+  badges: { key: string; label: string }[]
+  code: GameCode | null
+  my_rating: { stars: number; comment: string | null } | null
+  played: boolean
+}
+
+export interface GameRating {
+  id: number
+  username: string
+  comment: string | null
+  helpful_count: number
+  helped: boolean
+  mine: boolean
+  created: string
+  // 只有老师看得到每个人打的星
+  stars?: number
+}
+
+export interface GameReplayRound {
+  question: string
+  source: string
+  prompt_level: number | null
+  assistant_msg_id: number | null
+  html: string | null
+  css: string | null
+  js: string | null
+  version: number | null
+}
+
+export interface GameReport {
+  id: number
+  reason: string
+  reporter: string
+  created: string
+  resolved_at: string | null
+  game: { display: number; title: string; status: GameStatus }
+}
+
+export interface GameLogItem {
+  id: number
+  action: string
+  actor: string | null
+  game: { display: number | null; title: string }
+  reason: string
+  created: string
+}

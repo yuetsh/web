@@ -27,6 +27,17 @@ import type {
   ReviewProgress,
   ReviewStudent,
   PeerWorks,
+  GameCard,
+  GameDetail,
+  GameLeaderItem,
+  GameLogItem,
+  GameRating,
+  GameReplayRound,
+  GameReport,
+  GameTag,
+  GameTakedown,
+  GameWorkspace,
+  MyGame,
 } from "./utils/type"
 import { BASE_URL } from "./utils/const"
 import {
@@ -615,5 +626,162 @@ export const TaskAssets = {
         `/assets/tutorial/${display}/${encodeURIComponent(name)}`,
       )
     ).data
+  },
+}
+
+// 游戏板块（后端 server/src/routes/game.ts）
+export type GameSection = "featured" | "hot" | "new" | "updated" | "top" | "random"
+
+export const Game = {
+  async tags(): Promise<GameTag[]> {
+    return (await http.get("/game/tags")).data
+  },
+
+  async mine(): Promise<MyGame[]> {
+    return (await http.get("/game/mine")).data
+  },
+
+  async create(payload: { title: string; content?: string }): Promise<GameWorkspace> {
+    return (await http.post("/game", payload)).data
+  },
+
+  async hall(params: {
+    section: GameSection
+    tag?: string
+    page?: number
+    page_size?: number
+  }): Promise<{ items: GameCard[]; count: number }> {
+    return (await http.get("/game/hall", { params })).data
+  },
+
+  async leaderboard(period: "week" | "month"): Promise<GameLeaderItem[]> {
+    return (await http.get("/game/leaderboard", { params: { period } })).data
+  },
+
+  async get(display: number): Promise<GameDetail> {
+    return (await http.get(`/game/${display}`)).data
+  },
+
+  async workspace(display: number): Promise<GameWorkspace> {
+    return (await http.get(`/game/${display}/workspace`)).data
+  },
+
+  async update(display: number, payload: { title: string; content: string }): Promise<GameWorkspace> {
+    return (await http.put(`/game/${display}`, payload)).data
+  },
+
+  async saveCode(display: number, code: { html: string; css: string; js: string }) {
+    return (await http.put(`/game/${display}/code`, code)).data
+  },
+
+  async remove(display: number) {
+    return (await http.delete(`/game/${display}`)).data
+  },
+
+  async publish(
+    display: number,
+    payload: { message_id?: number; notes: string; tags: string[] },
+  ): Promise<{ version: number; status: string }> {
+    return (await http.post(`/game/${display}/releases`, payload)).data
+  },
+
+  async notesDraft(display: number): Promise<{ notes: string }> {
+    return (await http.post(`/game/${display}/notes-draft`)).data
+  },
+
+  // 封面是预览截的 data: URL，转成文件上传
+  async uploadCover(display: number, dataUrl: string): Promise<{ cover: string }> {
+    const blob = await (await fetch(dataUrl)).blob()
+    const form = new FormData()
+    form.append("image", blob, "cover.png")
+    return (await http.put(`/game/${display}/cover`, form)).data
+  },
+
+  async setReplayPublic(display: number, isPublic: boolean) {
+    return (await http.put(`/game/${display}/replay`, { public: isPublic })).data
+  },
+
+  async appeal(display: number) {
+    return (await http.post(`/game/${display}/appeal`)).data
+  },
+
+  async release(display: number, version: number) {
+    return (await http.get(`/game/${display}/releases/${version}`)).data
+  },
+
+  async ratings(
+    display: number,
+    params: { version?: number; page?: number; page_size?: number } = {},
+  ): Promise<{ items: GameRating[]; count: number }> {
+    return (await http.get(`/game/${display}/ratings`, { params })).data
+  },
+
+  async replay(display: number): Promise<{ rounds: GameReplayRound[] }> {
+    return (await http.get(`/game/${display}/replay`)).data
+  },
+
+  async play(display: number): Promise<{ counted: boolean; play_count: number }> {
+    return (await http.post(`/game/${display}/play`)).data
+  },
+
+  async rate(
+    display: number,
+    payload: { stars: number; comment?: string },
+  ): Promise<{ stars: number; comment: string | null; rating: number | null; rating_count: number }> {
+    return (await http.put(`/game/${display}/rating`, payload)).data
+  },
+
+  async toggleHelpful(ratingId: number): Promise<{ helped: boolean; helpful_count: number }> {
+    return (await http.post(`/game/ratings/${ratingId}/helpful`)).data
+  },
+
+  async report(display: number, reason: string) {
+    return (await http.post(`/game/${display}/report`, { reason })).data
+  },
+
+  // ── 老师 ──
+
+  async takedown(display: number, reason: string) {
+    return (await http.post(`/game/${display}/takedown`, { reason })).data
+  },
+
+  async restore(display: number): Promise<{ status: string }> {
+    return (await http.post(`/game/${display}/restore`)).data
+  },
+
+  async setFeatured(display: number, featured: boolean) {
+    return (await http.put(`/game/${display}/featured`, { featured })).data
+  },
+
+  async awardBadge(display: number, badge: "creative" | "best-update") {
+    return (await http.post(`/game/${display}/badges`, { badge })).data
+  },
+
+  async deleteComment(ratingId: number) {
+    return (await http.delete(`/game/ratings/${ratingId}/comment`)).data
+  },
+
+  async summary(): Promise<{ pending_reports: number; appeals: number }> {
+    return (await http.get("/game/admin/summary")).data
+  },
+
+  async reports(params: {
+    status: "pending" | "all"
+    page?: number
+    page_size?: number
+  }): Promise<{ items: GameReport[]; count: number }> {
+    return (await http.get("/game/admin/reports", { params })).data
+  },
+
+  async resolveReport(id: number) {
+    return (await http.post(`/game/admin/reports/${id}/resolve`)).data
+  },
+
+  async takedowns(): Promise<GameTakedown[]> {
+    return (await http.get("/game/admin/takedowns")).data
+  },
+
+  async log(params: { page?: number; page_size?: number }): Promise<{ items: GameLogItem[]; count: number }> {
+    return (await http.get("/game/admin/log", { params })).data
   },
 }

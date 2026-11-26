@@ -4,7 +4,8 @@
       <slot name="title"><n-text class="titleText">预览</n-text></slot>
     </div>
     <n-flex>
-      <n-tooltip>
+      <slot name="actions" />
+      <n-tooltip v-if="!game">
         <template #trigger>
           <n-button quaternary @click="cycleLayout">
             <template #icon>
@@ -14,7 +15,7 @@
         </template>
         {{ layoutLabel }}
       </n-tooltip>
-      <n-button quaternary @click="download" :disabled="!showDL">下载</n-button>
+      <n-button v-if="!game" quaternary @click="download" :disabled="!showDL">下载</n-button>
       <n-button quaternary @click="open">全屏</n-button>
     </n-flex>
   </n-flex>
@@ -49,9 +50,17 @@ interface Props {
   assetBaseUrl?: string
   // 自己的编辑器传当前任务 id：代码里的 localStorage 按“用户 + 任务”存下来，刷新后还在
   storageTaskId?: number
+  // 游戏：注入 Phaser 和辅助代码（public/game/runtime.js），它发来的消息转成 game-message 事件
+  game?: boolean
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  // runtime.js 发来的：started / cover / snapshot / error / warning
+  "game-message": [msg: { type: string; message?: string; dataUrl?: string }]
+  // 换了新的 iframe（代码改了），之前的报错作废
+  reloaded: []
+}>()
 
 type Layout = "desktop" | "mobile" | "tablet"
 const layouts: Layout[] = ["desktop", "mobile", "tablet"]
@@ -104,6 +113,7 @@ function getContent(forDownload = false) {
     js: props.js,
     assetBaseUrl: props.assetBaseUrl,
     storage: forDownload ? false : scope ? loadPreviewStorage(scope) : undefined,
+    game: props.game,
   })
 }
 
@@ -113,7 +123,22 @@ const frameKey = ref(0)
 function preview() {
   previewContent.value = getContent()
   frameKey.value++
+  emit("reloaded")
 }
+
+// 只认自己这个 iframe 发来的消息（页面上可能还有别的预览）
+function onMessage(e: MessageEvent) {
+  if (!props.game || !frame.value || e.source !== frame.value.contentWindow) return
+  const d = e.data
+  if (d && d.source === "wp-game" && typeof d.type === "string") emit("game-message", d)
+}
+
+// 给游戏发消息：snapshot（要一张当前画面，回 snapshot 消息）
+function postToGame(type: string) {
+  frame.value?.contentWindow?.postMessage({ source: "wp-parent", type }, "*")
+}
+
+defineExpose({ postToGame })
 
 function download() {
   const content = getContent(true)
@@ -144,7 +169,7 @@ function open() {
 
 
 watchDebounced(
-  () => [props.html, props.css, props.js, props.assetBaseUrl],
+  () => [props.html, props.css, props.js, props.assetBaseUrl, props.game],
   preview,
   {
     debounce: 500,
@@ -152,6 +177,8 @@ watchDebounced(
   },
 )
 onMounted(preview)
+onMounted(() => window.addEventListener("message", onMessage))
+onUnmounted(() => window.removeEventListener("message", onMessage))
 onUnmounted(listenPreviewStorage(window, () => frame.value, storageScope))
 </script>
 <style scoped>
