@@ -154,7 +154,7 @@ async function load() {
       : null
   content.value = await challengeMarked.parse(data.content, { async: true })
   if (disposed) return
-  taskId.value = data.task_ptr
+  taskId.value = data.id
 }
 
 function useExample() {

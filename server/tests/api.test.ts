@@ -5,7 +5,7 @@ import { config } from "../src/config"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { PASSWORD, client, freshDb, makeSubmission, makeTask, makeUser, uuid } from "./helpers"
+import { PASSWORD, client, freshDb, makeSubmission, makeTask, makeUser } from "./helpers"
 
 beforeEach(freshDb)
 
@@ -13,13 +13,13 @@ describe("权限", () => {
   test("未登录 401，角色不够 403", async () => {
     makeUser("stu")
     makeUser("adm", "admin")
-    expect((await (await client())("GET", "/api/submission/")).status).toBe(401)
+    expect((await (await client())("GET", "/api/submission")).status).toBe(401)
     const stu = await client("stu")
     expect((await stu("GET", "/api/challenge/list")).status).toBe(403)
-    expect((await stu("GET", "/api/submission/gradebook/?classname=a")).status).toBe(403)
+    expect((await stu("GET", "/api/submission/gradebook?classname=a")).status).toBe(403)
     const adm = await client("adm")
     expect((await adm("GET", "/api/challenge/list")).status).toBe(200)
-    expect((await adm("GET", "/api/submission/gradebook/?classname=a")).status).toBe(403)
+    expect((await adm("GET", "/api/submission/gradebook?classname=a")).status).toBe(403)
   })
 
   test("未公开的教程只有超管能看，未公开的挑战管理员也能看", async () => {
@@ -79,7 +79,7 @@ describe("JWT 登录", () => {
     makeUser("stu")
     const stu = await client("stu")
     expect(stu.tokens.access_token.split(".")).toHaveLength(3)
-    expect(get(`SELECT token_hash FROM auth_refresh_token`).token_hash).not.toBe(stu.tokens.refresh_token)
+    expect(get(`SELECT token_hash FROM refresh_tokens`).token_hash).not.toBe(stu.tokens.refresh_token)
 
     const anon = await client()
     const res = await anon("POST", "/api/account/refresh", { refresh_token: stu.tokens.refresh_token })
@@ -93,7 +93,7 @@ describe("JWT 登录", () => {
     const stu = await client("stu")
     const { sign } = await import("hono/jwt")
     const { config } = await import("../src/config")
-    const userId = get(`SELECT id FROM account_user WHERE username = 'stu'`).id
+    const userId = get(`SELECT id FROM users WHERE username = 'stu'`).id
     stu.tokens.access_token = await sign({ sub: userId, exp: Math.floor(Date.now() / 1000) - 1 }, config.jwtSecret)
     expect((await stu("GET", "/api/account/profile")).status).toBe(401)
     stu.tokens.access_token = "garbage"
@@ -126,7 +126,7 @@ describe("账号管理", () => {
 
     const id = created.json.id
     expect((await boss("PUT", `/api/account/${id}`, { role: "normal", classname: "10A", password: "zzzzzz" })).status).toBe(200)
-    const row = get(`SELECT role, classname, raw_password FROM account_user WHERE id = $id`, { id })
+    const row = get(`SELECT role, classname, raw_password FROM users WHERE id = $id`, { id })
     expect(row).toEqual({ role: "normal", classname: "10A", raw_password: "zzzzzz" })
     // 新密码能登录
     const { app } = await import("../src/app")
@@ -163,29 +163,29 @@ describe("评分", () => {
     const task = makeTask("T")
     const sub = makeSubmission(author, task)
 
-    await (await client("boss"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 5 })
-    await (await client("adm"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 3 })
-    let row = get(`SELECT raw_score, score, zone FROM submission_submission WHERE id = $id`, { id: sub })
+    await (await client("boss"))("PUT", `/api/submission/${sub}/score`, { score: 5 })
+    await (await client("adm"))("PUT", `/api/submission/${sub}/score`, { score: 3 })
+    let row = get(`SELECT raw_score, score, zone FROM submissions WHERE id = $id`, { id: sub })
     // raw = (5*0.5 + 3*0.3) / 0.8；没有别的提交，先验就是自己
     expect(row.raw_score).toBeCloseTo(4.25)
     expect(row.score).toBeCloseTo(4.25)
     expect(row.zone).toBe("pending")
 
     // 学生要自己也交过这道题才能打分
-    for (let i = 0; i < 3; i++) makeSubmission(get(`SELECT id FROM account_user WHERE username = 's${i}'`).id, task)
+    for (let i = 0; i < 3; i++) makeSubmission(get(`SELECT id FROM users WHERE username = 's${i}'`).id, task)
     for (let i = 0; i < 3; i++) {
-      await (await client(`s${i}`))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 5 })
+      await (await client(`s${i}`))("PUT", `/api/submission/${sub}/score`, { score: 5 })
     }
-    row = get(`SELECT score, zone FROM submission_submission WHERE id = $id`, { id: sub })
+    row = get(`SELECT score, zone FROM submissions WHERE id = $id`, { id: sub })
     expect(row.zone).toBe("featured")
 
-    const again = await (await client("s0"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 1 })
+    const again = await (await client("s0"))("PUT", `/api/submission/${sub}/score`, { score: 1 })
     expect(again.json.message).toBe("你已经给这个提交打过分了")
-    expect((await (await client("s0"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 0 })).status).toBe(400)
-    expect((await (await client("s1"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 6 })).status).toBe(422)
-    const self = await (await client("author"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 5 })
+    expect((await (await client("s0"))("PUT", `/api/submission/${sub}/score`, { score: 0 })).status).toBe(400)
+    expect((await (await client("s1"))("PUT", `/api/submission/${sub}/score`, { score: 6 })).status).toBe(422)
+    const self = await (await client("author"))("PUT", `/api/submission/${sub}/score`, { score: 5 })
     expect(self.status).toBe(400)
-    expect(all(`SELECT 1 FROM submission_rating WHERE user_id = $id`, { id: author })).toEqual([])
+    expect(all(`SELECT 1 FROM ratings WHERE user_id = $id`, { id: author })).toEqual([])
   })
 })
 
@@ -200,7 +200,7 @@ describe("随机评分", () => {
     const seen = new Set<string>()
     for (let i = 0; i < 5; i++) {
       const res = await c("GET", "/api/submission/random-for-rating")
-      expect(subs.map(uuid)).toContain(res.json.submission_id)
+      expect(subs).toContain(res.json.submission_id)
       expect(seen.has(res.json.submission_id)).toBe(false)
       seen.add(res.json.submission_id)
       await c("PUT", `/api/submission/${res.json.submission_id}/score`, { score: 4 })
@@ -214,9 +214,9 @@ describe("提交与删除", () => {
     makeUser("stu")
     const task = makeTask("T")
     const stu = await client("stu")
-    const res = await stu("POST", "/api/submission/", { task_id: task, html: "<p>", prompt: "做个页面" })
+    const res = await stu("POST", "/api/submission", { task_id: task, html: "<p>", prompt: "做个页面" })
     expect(res.status).toBe(200)
-    const msgs = all(`SELECT role, source, submission_id FROM prompt_message ORDER BY id`)
+    const msgs = all(`SELECT role, source, submission_id FROM messages ORDER BY id`)
     expect(msgs.map((m) => [m.role, m.source])).toEqual([
       ["user", "manual"],
       ["assistant", "manual"],
@@ -225,7 +225,7 @@ describe("提交与删除", () => {
     expect(chain.json[0].question).toBe("做个页面")
 
     expect((await stu("DELETE", `/api/submission/${res.json.id}`)).status).toBe(200)
-    expect(all(`SELECT * FROM prompt_message`)).toEqual([])
+    expect(all(`SELECT * FROM messages`)).toEqual([])
   })
 
   test("保存手改 / 外部 AI 版本，交这一版时关联到它", async () => {
@@ -248,12 +248,12 @@ describe("提交与删除", () => {
       ["manual", "用外部 AI 做的"],
     ])
 
-    const sub = await stu("POST", "/api/submission/", { task_id: task, html: "<p>1", message_id: edit.json.message_id })
-    const linked = get(`SELECT submission_id FROM prompt_message WHERE id = $id`, { id: edit.json.message_id })
-    expect(linked.submission_id).toBe(sub.json.id.replaceAll("-", ""))
+    const sub = await stu("POST", "/api/submission", { task_id: task, html: "<p>1", message_id: edit.json.message_id })
+    const linked = get(`SELECT submission_id FROM messages WHERE id = $id`, { id: edit.json.message_id })
+    expect(linked.submission_id).toBe(sub.json.id)
     // 同一个版本再交一次，更新原来的提交，不新建
-    await stu("POST", "/api/submission/", { task_id: task, html: "<p>1!", message_id: edit.json.message_id })
-    expect(all(`SELECT html FROM submission_submission`)).toEqual([{ html: "<p>1!" }])
+    await stu("POST", "/api/submission", { task_id: task, html: "<p>1!", message_id: edit.json.message_id })
+    expect(all(`SELECT html FROM submission_code`)).toEqual([{ html: "<p>1!" }])
   })
 
   test("删除一轮对话：连带提问和关联提交；被评过分的不能删", async () => {
@@ -262,18 +262,18 @@ describe("提交与删除", () => {
     const task = makeTask("T")
     const otherSub = makeSubmission(other, task)
     const stu = await client("stu")
-    const first = await stu("POST", "/api/submission/", { task_id: task, html: "<p>1", prompt: "第一版" })
-    const second = await stu("POST", "/api/submission/", { task_id: task, html: "<p>2", prompt: "第二版" })
+    const first = await stu("POST", "/api/submission", { task_id: task, html: "<p>1", prompt: "第一版" })
+    const second = await stu("POST", "/api/submission", { task_id: task, html: "<p>2", prompt: "第二版" })
     const asstOf = (sub: string) =>
-      get(`SELECT id FROM prompt_message WHERE submission_id = $id`, { id: sub.replaceAll("-", "") })!.id
+      get(`SELECT id FROM messages WHERE submission_id = $id`, { id: sub })!.id
 
     await (await client("other"))("PUT", `/api/submission/${second.json.id}/score`, { score: 4 })
     expect((await stu("DELETE", `/api/prompt/messages/${asstOf(second.json.id)}/pair`)).status).toBe(400)
 
     const res = await stu("DELETE", `/api/prompt/messages/${asstOf(first.json.id)}/pair`)
     expect(res.json).toEqual({ deleted: true, submission_deleted: true })
-    expect(all(`SELECT content FROM prompt_message WHERE role = 'user'`)).toEqual([{ content: "第二版" }])
-    expect(all(`SELECT COUNT(*) AS n FROM submission_submission WHERE id != $id`, { id: otherSub })).toEqual([{ n: 1 }])
+    expect(all(`SELECT content FROM messages WHERE role = 'user'`)).toEqual([{ content: "第二版" }])
+    expect(all(`SELECT COUNT(*) AS n FROM submissions WHERE id != $id`, { id: otherSub })).toEqual([{ n: 1 }])
   })
 
   test("交的时候写的反思：再交没写就保留，只有老师和作者能看，删提交时一起删", async () => {
@@ -283,25 +283,25 @@ describe("提交与删除", () => {
     const task = makeTask("T")
     const stu = await client("stu")
     const edit = await stu("POST", "/api/prompt/versions", { task_id: task, html: "<p>1", css: "", js: "" })
-    const sub = await stu("POST", "/api/submission/", {
+    const sub = await stu("POST", "/api/submission", {
       task_id: task,
       html: "<p>1",
       message_id: edit.json.message_id,
       reflection: "  按钮改成三个，因为五个太乱  ",
     })
     const id = sub.json.id
-    await stu("POST", "/api/submission/", { task_id: task, html: "<p>1!", message_id: edit.json.message_id, reflection: "" })
+    await stu("POST", "/api/submission", { task_id: task, html: "<p>1!", message_id: edit.json.message_id, reflection: "" })
     expect((await stu("GET", `/api/submission/${id}`)).json.reflection).toBe("按钮改成三个，因为五个太乱")
     expect((await (await client("teacher"))("GET", `/api/submission/${id}`)).json.reflection).toBe("按钮改成三个，因为五个太乱")
 
     const mate = await client("mate")
-    await mate("POST", "/api/submission/", { task_id: task, html: "<p>m" })
+    await mate("POST", "/api/submission", { task_id: task, html: "<p>m" })
     const peer = await mate("GET", `/api/submission/${id}`)
     expect(peer.status).toBe(200)
     expect(peer.json.reflection).toBeNull()
 
     expect((await stu("DELETE", `/api/submission/${id}`)).status).toBe(200)
-    expect(all(`SELECT * FROM submission_reflection`)).toEqual([])
+    expect(all(`SELECT * FROM reflections`)).toEqual([])
   })
 
   test("被评分的提交只有超管能删", async () => {
@@ -311,10 +311,10 @@ describe("提交与删除", () => {
     const task = makeTask("T")
     const sub = makeSubmission(author, task)
     makeSubmission(other, task)
-    await (await client("other"))("PUT", `/api/submission/${uuid(sub)}/score`, { score: 4 })
-    expect((await (await client("author"))("DELETE", `/api/submission/${uuid(sub)}`)).status).toBe(400)
-    expect((await (await client("boss"))("DELETE", `/api/submission/${uuid(sub)}`)).status).toBe(200)
-    expect(all(`SELECT * FROM submission_rating`)).toEqual([])
+    await (await client("other"))("PUT", `/api/submission/${sub}/score`, { score: 4 })
+    expect((await (await client("author"))("DELETE", `/api/submission/${sub}`)).status).toBe(400)
+    expect((await (await client("boss"))("DELETE", `/api/submission/${sub}`)).status).toBe(200)
+    expect(all(`SELECT * FROM ratings`)).toEqual([])
   })
 
   test("删除挑战级联删除提交和对话", async () => {
@@ -322,9 +322,9 @@ describe("提交与删除", () => {
     makeUser("adm", "admin")
     const task = makeTask("T", "challenge", 3)
     makeSubmission(stu, task)
-    await (await client("stu"))("POST", "/api/submission/", { task_id: task, html: "", prompt: "x" })
+    await (await client("stu"))("POST", "/api/submission", { task_id: task, html: "", prompt: "x" })
     expect((await (await client("adm"))("DELETE", "/api/challenge/3")).status).toBe(200)
-    for (const t of ["task_task", "task_challenge", "submission_submission", "prompt_conversation", "prompt_message"]) {
+    for (const t of ["tasks", "submissions", "submission_code", "conversations", "messages"]) {
       expect(all(`SELECT * FROM ${t}`)).toEqual([])
     }
   })
@@ -336,9 +336,9 @@ describe("提交与删除", () => {
     const latest = makeSubmission(a, task, 2, "2026-01-02 00:00:00.000000")
     const list = await (await client("alice"))("GET", "/api/submission?page=1")
     expect(list.json.count).toBe(1)
-    expect(list.json.items[0].id).toBe(uuid(latest))
+    expect(list.json.items[0].id).toBe(latest)
     expect(list.json.items[0].submit_count).toBe(2)
-    const all2 = await (await client("alice"))("GET", "/api/submission/?page=1&grouped=false")
+    const all2 = await (await client("alice"))("GET", "/api/submission?page=1&grouped=false")
     expect(all2.json.count).toBe(2)
   })
 })
@@ -351,7 +351,7 @@ describe("成绩册", () => {
 
   test("必须选择班级", async () => {
     const boss = await superClient()
-    const res = await boss("GET", "/api/submission/gradebook/")
+    const res = await boss("GET", "/api/submission/gradebook")
     expect(res.status).toBe(400)
     expect(res.json.detail).toBe("请选择班级")
   })
@@ -368,7 +368,7 @@ describe("成绩册", () => {
     makeSubmission(bob!, challenge, 4)
     makeSubmission(alice!, optional, 5)
 
-    const data = (await boss("GET", "/api/submission/gradebook/?classname=10A")).json
+    const data = (await boss("GET", "/api/submission/gradebook?classname=10A")).json
     expect(data.student_count).toBe(4)
     expect(data.coverage_threshold_count).toBe(2)
     expect(data.included_task_count).toBe(2)
@@ -377,7 +377,7 @@ describe("成绩册", () => {
     const carol = data.rows.find((r: any) => r.username === "carol")
     expect([carol.total_score, carol.submitted_task_count, carol.missing_task_count]).toEqual([0, 0, 2])
 
-    const withAll = (await boss("GET", "/api/submission/gradebook/?classname=10A&include_all_tasks=true")).json
+    const withAll = (await boss("GET", "/api/submission/gradebook?classname=10A&include_all_tasks=true")).json
     const alice2 = withAll.rows.find((r: any) => r.username === "alice")
     expect(alice2.scores[String(optional)]).toMatchObject({ submitted: true, score: 5 })
     expect(alice2.total_score).toBe(7)
@@ -390,8 +390,8 @@ describe("成绩册", () => {
     makeSubmission(alice, task, 4.5, "2026-01-01 00:00:00.000000")
     const newer = makeSubmission(alice, task, 4.5, "2026-01-02 00:00:00.000000")
     makeSubmission(alice, task, 3, "2026-01-03 00:00:00.000000")
-    const data = (await boss("GET", "/api/submission/gradebook/?classname=10A")).json
-    expect(data.rows[0].scores[String(task)].submission_id).toBe(uuid(newer))
+    const data = (await boss("GET", "/api/submission/gradebook?classname=10A")).json
+    expect(data.rows[0].scores[String(task)].submission_id).toBe(newer)
   })
 
   test("等级按向上取整的名次划分", async () => {
@@ -400,7 +400,7 @@ describe("成绩册", () => {
     for (let i = 1; i <= 20; i++) {
       makeSubmission(makeUser(`s${String(i).padStart(2, "0")}`, "normal", "10B"), task, 21 - i)
     }
-    const data = (await boss("GET", "/api/submission/gradebook/?classname=10B")).json
+    const data = (await boss("GET", "/api/submission/gradebook?classname=10B")).json
     const grade = Object.fromEntries(data.rows.map((r: any) => [r.username, r.grade]))
     expect([grade.s01, grade.s06, grade.s07, grade.s14, grade.s15, grade.s18, grade.s19, grade.s20]).toEqual([
       "A", "A", "B", "B", "C", "C", "D", "E",
@@ -418,7 +418,7 @@ describe("成绩册", () => {
     makeSubmission(alice, tutorial, 4)
     makeSubmission(bob, tutorial, 2)
     makeSubmission(alice, makeTask("C", "challenge", 1), 5)
-    const res = await boss("GET", "/api/submission/gradebook/export/?classname=10A&task_type=tutorial")
+    const res = await boss("GET", "/api/submission/gradebook/export?classname=10A&task_type=tutorial")
     expect(res.headers.get("content-type")).toBe("text/csv; charset=utf-8")
     expect(res.headers.get("content-disposition")).toContain("attachment;")
     const rows = res.text.replace(/^﻿/, "").trim().split("\r\n").map((l) => l.split(","))
@@ -438,16 +438,16 @@ describe("作品展", () => {
     const adm = await client("adm")
     const award = (await adm("POST", "/api/submission/showcase/manage/awards", { name: "最佳" })).json
     expect(award.item_count).toBe(0)
-    const item = (await adm("POST", `/api/submission/showcase/manage/awards/${award.id}/items`, { submission_id: uuid(sub) })).json
-    expect((await adm("POST", `/api/submission/showcase/manage/awards/${award.id}/items`, { submission_id: uuid(sub) })).json.detail).toBe("该作品已在奖项中")
+    const item = (await adm("POST", `/api/submission/showcase/manage/awards/${award.id}/items`, { submission_id: sub })).json
+    expect((await adm("POST", `/api/submission/showcase/manage/awards/${award.id}/items`, { submission_id: sub })).json.detail).toBe("该作品已在奖项中")
 
     const author1 = await client("author")
-    expect((await author1("GET", "/api/submission/showcase/")).json).toHaveLength(1)
-    expect((await author1("GET", `/api/submission/showcase/${uuid(sub)}/`)).json).toMatchObject({ awards: ["最佳"], task_type: "challenge" })
+    expect((await author1("GET", "/api/submission/showcase")).json).toHaveLength(1)
+    expect((await author1("GET", `/api/submission/showcase/${sub}`)).json).toMatchObject({ awards: ["最佳"], task_type: "challenge" })
 
     await adm("PUT", `/api/submission/showcase/manage/awards/${award.id}`, { name: "最佳", is_active: false })
-    expect((await author1("GET", "/api/submission/showcase/")).json).toEqual([])
-    expect((await author1("GET", `/api/submission/showcase/${uuid(sub)}/`)).status).toBe(404)
+    expect((await author1("GET", "/api/submission/showcase")).json).toEqual([])
+    expect((await author1("GET", `/api/submission/showcase/${sub}`)).status).toBe(404)
 
     await adm("DELETE", `/api/submission/showcase/manage/items/${item.id}`)
     expect((await adm("GET", "/api/submission/showcase/manage/awards")).json[0].item_count).toBe(0)
@@ -458,11 +458,11 @@ describe("作品展", () => {
     makeUser("adm", "admin")
     const task = makeTask("T")
     const author = await client("author")
-    const first = (await author("POST", "/api/submission/", { task_id: task, html: "1" })).json.id
+    const first = (await author("POST", "/api/submission", { task_id: task, html: "1" })).json.id
     const adm = await client("adm")
     const award = (await adm("POST", "/api/submission/showcase/manage/awards", { name: "A" })).json
     const item = (await adm("POST", `/api/submission/showcase/manage/awards/${award.id}/items`, { submission_id: first })).json
-    const second = (await author("POST", "/api/submission/", { task_id: task, html: "2" })).json.id
+    const second = (await author("POST", "/api/submission", { task_id: task, html: "2" })).json.id
     let items = (await adm("GET", `/api/submission/showcase/manage/awards/${award.id}/items`)).json
     expect(items[0].is_stale).toBe(true)
     const refreshed = (await adm("PUT", `/api/submission/showcase/manage/items/${item.id}/refresh`)).json
@@ -477,16 +477,16 @@ describe("自由创作", () => {
     makeUser("you")
     makeUser("boss", "super")
     const me = await client("me")
-    const c = (await me("POST", "/api/creation/", { title: "  作品  ", content: "d" })).json
+    const c = (await me("POST", "/api/creation", { title: "  作品  ", content: "d" })).json
     expect(c.title).toBe("作品")
     expect(c.display).toBe(1)
-    expect((await me("POST", "/api/creation/", { title: " " })).status).toBe(400)
+    expect((await me("POST", "/api/creation", { title: " " })).status).toBe(400)
     expect((await (await client("you"))("GET", `/api/creation/${c.display}`)).status).toBe(403)
     expect((await (await client("boss"))("GET", `/api/creation/${c.display}`)).status).toBe(200)
     const saved = (await me("PUT", `/api/creation/${c.display}/code`, { html: "<p>" })).json
     expect(saved.html).toBe("<p>")
     expect((await me("GET", "/api/creation/mine")).json[0].has_code).toBe(true)
-    expect((await me("POST", "/api/submission/", { task_id: c.task_id })).json.detail).toBe("自由创作不需要提交")
+    expect((await me("POST", "/api/submission", { task_id: c.task_id })).json.detail).toBe("自由创作不需要提交")
   })
 })
 
@@ -537,25 +537,25 @@ describe("同学作品与批改", () => {
     const otherSub = makeSubmission(other, task)
     const stu = await client("me")
 
-    expect((await stu("GET", `/api/submission/${uuid(mateSub)}`)).status).toBe(403)
-    expect((await stu("GET", `/api/submission/${uuid(mateSub)}/prompt-chain`)).status).toBe(403)
+    expect((await stu("GET", `/api/submission/${mateSub}`)).status).toBe(403)
+    expect((await stu("GET", `/api/submission/${mateSub}/prompt-chain`)).status).toBe(403)
     const locked = await stu("GET", `/api/submission/review/peers/${task}`)
     expect(locked.json).toEqual({ locked: true, items: [] })
 
-    expect((await stu("GET", `/api/submission/${uuid(otherSub)}`)).status).toBe(403)
+    expect((await stu("GET", `/api/submission/${otherSub}`)).status).toBe(403)
     makeSubmission(me, task)
-    const peer = await stu("GET", `/api/submission/${uuid(mateSub)}`)
+    const peer = await stu("GET", `/api/submission/${mateSub}`)
     expect(peer.status).toBe(200)
     // 打分前不显示作者和得分
     expect(peer.json).toMatchObject({ userid: null, username: null, score: null })
     // 交过以后外班的也能看
-    expect((await stu("GET", `/api/submission/${uuid(otherSub)}`)).status).toBe(200)
+    expect((await stu("GET", `/api/submission/${otherSub}`)).status).toBe(200)
     // 没交过的题仍然看不到
     const otherTask = makeTask("T2", "challenge", 2)
     const otherTaskSub = makeSubmission(mate, otherTask)
-    expect((await stu("GET", `/api/submission/${uuid(otherTaskSub)}`)).status).toBe(403)
+    expect((await stu("GET", `/api/submission/${otherTaskSub}`)).status).toBe(403)
     // 列表里只有自己的
-    const list = await stu("GET", "/api/submission/")
+    const list = await stu("GET", "/api/submission")
     expect(list.json.items.map((s: any) => s.username)).toEqual(["me"])
     expect((await stu("GET", `/api/submission/by-user-task?user_id=${mate}&task_id=${task}`)).status).toBe(403)
   })
@@ -571,27 +571,27 @@ describe("同学作品与批改", () => {
 
     // 没交过的同学既不能打分，也抽不到这道题
     const other = await client("other")
-    expect((await other("PUT", `/api/submission/${uuid(mateSub)}/score`, { score: 3 })).status).toBe(403)
+    expect((await other("PUT", `/api/submission/${mateSub}/score`, { score: 3 })).status).toBe(403)
     expect((await other("GET", "/api/submission/random-for-rating")).json).toBeNull()
 
     let peers = await stu("GET", `/api/submission/review/peers/${task}`)
     expect(peers.json.items).toHaveLength(1)
-    expect(peers.json.items[0]).toMatchObject({ id: uuid(mateSub), username: null, score: null, my_score: 0 })
+    expect(peers.json.items[0]).toMatchObject({ id: mateSub, username: null, score: null, my_score: 0 })
 
-    const rated = await stu("PUT", `/api/submission/${uuid(mateSub)}/score`, { score: 4 })
+    const rated = await stu("PUT", `/api/submission/${mateSub}/score`, { score: 4 })
     expect(rated.json.username).toBe("mate")
     peers = await stu("GET", `/api/submission/review/peers/${task}`)
     expect(peers.json.items[0]).toMatchObject({ username: "mate", my_score: 4 })
-    expect((await stu("GET", `/api/submission/${uuid(mateSub)}`)).json).toMatchObject({ username: "mate" })
+    expect((await stu("GET", `/api/submission/${mateSub}`)).json).toMatchObject({ username: "mate" })
 
     // 默认只看本班；scope=all 能看到外班，标着班级，同样匿名
-    const otherSub = makeSubmission(get(`SELECT id FROM account_user WHERE username = 'other'`).id, task)
+    const otherSub = makeSubmission(get(`SELECT id FROM users WHERE username = 'other'`).id, task)
     const random = await other("GET", "/api/submission/random-for-rating")
     expect(random.json.submission_id).toBeDefined()
     expect(random.json.username).toBeUndefined()
     const all = await stu("GET", `/api/submission/review/peers/${task}?scope=all`)
     expect(all.json.items.map((w: any) => [w.classname, w.username])).toContainEqual(["c2", null])
-    expect(all.json.items.map((w: any) => w.id)).toContain(uuid(otherSub))
+    expect(all.json.items.map((w: any) => w.id)).toContain(otherSub)
     const mine = await stu("GET", `/api/submission/review/peers/${task}`)
     expect(mine.json.items.map((w: any) => w.classname)).toEqual(["c1"])
 
@@ -614,7 +614,7 @@ describe("同学作品与批改", () => {
     expect((await (await client("a"))("GET", `/api/submission/review/class?classname=c1&task_id=${task}`)).status).toBe(403)
     const wall = await teacher("GET", `/api/submission/review/class?classname=c1&task_id=${task}`)
     expect(wall.json.map((s: any) => [s.username, s.submission?.id ?? null, s.submission?.submit_count])).toEqual([
-      ["a", uuid(latest), 2],
+      ["a", latest, 2],
       ["b", null, undefined],
     ])
     const progress = await teacher("GET", "/api/submission/review/progress?classname=c1")
@@ -634,7 +634,7 @@ describe("同学作品与批改", () => {
     const options = await teacher("GET", "/api/submission/review/options")
     expect(options.json.classes).toEqual(["c1", "c2"])
 
-    expect((await teacher("PUT", `/api/submission/${uuid(latest)}/flag`, { flag: "present" })).json.flag).toBe("present")
+    expect((await teacher("PUT", `/api/submission/${latest}/flag`, { flag: "present" })).json.flag).toBe("present")
   })
 })
 
@@ -650,7 +650,7 @@ describe("课堂总结", () => {
     const aBest = makeSubmission(a, task, 4.5, "2026-01-02 00:00:00.000000")
     makeSubmission(a, task, 4, "2026-01-03 00:00:00.000000")
     const bSub = makeSubmission(b, task, 0)
-    run(`UPDATE submission_submission SET flag = 'present' WHERE id = $id`, { id: bSub })
+    run(`UPDATE submissions SET flag = 'present' WHERE id = $id`, { id: bSub })
     makeSubmission(other, task, 5)
 
     const adm = await client("adm")
@@ -667,7 +667,7 @@ describe("课堂总结", () => {
     })
     expect(res.json.unsubmitted_users).toEqual([{ username: "weba1小刚", classname: "a1" }])
     expect(res.json.top_scored).toEqual([
-      { username: "weba1小明", classname: "a1", score: 4.5, submission_id: uuid(aBest) },
+      { username: "weba1小明", classname: "a1", score: 4.5, submission_id: aBest },
     ])
 
     const all = await adm("GET", `/api/submission/stats/${task}`)
@@ -680,7 +680,7 @@ describe("课堂总结", () => {
     const task = makeTask("挑战")
     const say = (conv: string, source: string, level: number | null, submission_id?: string) => {
       const id = insertMessage({ conversation_id: conv, role: "user", source, content: "提问" })
-      run(`UPDATE prompt_message SET prompt_level = $level WHERE id = $id`, { level, id })
+      run(`UPDATE messages SET prompt_level = $level WHERE id = $id`, { level, id })
       insertMessage({ conversation_id: conv, role: "assistant", source, content: "回答", submission_id })
     }
     // 小明：AI 对话 → 引导 → 外部 AI，交最后这版；交了之后的提问不算
@@ -714,9 +714,9 @@ describe("提示词分类", () => {
     const { createConversation, insertMessage } = await import("../src/services/prompt")
     const conv = createConversation(makeUser("stu"), makeTask("T"))
     const id = insertMessage({ conversation_id: conv, role: "user", content: " 1 " })
-    run(`UPDATE prompt_message SET prompt_level = 6 WHERE id = $id`, { id })
+    run(`UPDATE messages SET prompt_level = 6 WHERE id = $id`, { id })
     expect(await classifyMessage(id)).toBeNull()
-    const row = get<{ prompt_level: number | null }>(`SELECT prompt_level FROM prompt_message WHERE id = $id`, { id })
+    const row = get<{ prompt_level: number | null }>(`SELECT prompt_level FROM messages WHERE id = $id`, { id })
     expect(row!.prompt_level).toBeNull()
   })
 })

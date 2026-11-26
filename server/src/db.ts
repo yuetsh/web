@@ -2,63 +2,172 @@ import { Database } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
 import { config } from "./config"
+import { migrateFromDjango } from "./migrate-django"
 
-// 表结构与原 Django 项目保持一致（表名、列名、时间格式、UUID 存储方式），
-// 这样旧的 db.sqlite3 可以直接使用，Postgres 的数据也能原样导入。
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS "account_user" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "password" varchar(128) NOT NULL, "last_login" datetime NULL, "is_superuser" bool NOT NULL, "username" varchar(150) NOT NULL UNIQUE, "email" varchar(254) NOT NULL, "is_staff" bool NOT NULL, "is_active" bool NOT NULL, "date_joined" datetime NOT NULL, "role" varchar(20) NOT NULL, "raw_password" varchar(20) NULL, "classname" varchar(50) NOT NULL);
+// 约定：时间是 UTC 的 ISO 字符串（toISOString，毫秒精度，按字符串比较即按时间比较），只用 now() 写；
+// 布尔是 0/1；提交和对话的 id 是标准 UUID 字符串。
+// 外键都带 ON DELETE CASCADE，删任务 / 提交只需删那一行（要求 PRAGMA foreign_keys = ON）。
+// 子表的外键列都要有索引，否则级联删除会扫整张子表
+export const SCHEMA = `
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL,
+  -- 老师要能把密码告诉忘了密码的学生
+  raw_password TEXT,
+  role TEXT NOT NULL DEFAULT 'normal',
+  classname TEXT NOT NULL DEFAULT '',
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created TEXT NOT NULL,
+  last_login TEXT
+);
 
-CREATE TABLE IF NOT EXISTS "task_task" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "created" datetime NOT NULL, "modified" datetime NOT NULL, "title" varchar(100) NOT NULL, "content" text NOT NULL, "task_type" varchar(20) NOT NULL, "is_public" bool NOT NULL, "display" integer NOT NULL, "example_css" text NULL, "example_html" text NULL, "example_js" text NULL);
-CREATE INDEX IF NOT EXISTS "task_task_display_97da6aab" ON "task_task" ("display");
-CREATE UNIQUE INDEX IF NOT EXISTS "task_task_display_task_type_f648533c_uniq" ON "task_task" ("display", "task_type");
-CREATE TABLE IF NOT EXISTS "task_tutorial" ("task_ptr_id" bigint NOT NULL PRIMARY KEY REFERENCES "task_task" ("id") DEFERRABLE INITIALLY DEFERRED);
-CREATE TABLE IF NOT EXISTS "task_challenge" ("task_ptr_id" bigint NOT NULL PRIMARY KEY REFERENCES "task_task" ("id") DEFERRABLE INITIALLY DEFERRED, "score" integer NOT NULL, "pass_score" real NULL, "author_id" bigint NULL REFERENCES "account_user" ("id") DEFERRABLE INITIALLY DEFERRED);
-CREATE INDEX IF NOT EXISTS "task_challenge_author_id_d4492927" ON "task_challenge" ("author_id");
-CREATE TABLE IF NOT EXISTS "task_creation" ("task_ptr_id" bigint NOT NULL PRIMARY KEY REFERENCES "task_task" ("id") DEFERRABLE INITIALLY DEFERRED, "html" text NOT NULL, "css" text NOT NULL, "js" text NOT NULL, "owner_id" bigint NOT NULL REFERENCES "account_user" ("id") DEFERRABLE INITIALLY DEFERRED);
-CREATE INDEX IF NOT EXISTS "task_creation_owner_id_6ae3c55d" ON "task_creation" ("owner_id");
-CREATE TABLE IF NOT EXISTS "task_taskasset" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "name" varchar(100) NOT NULL, "file" varchar(100) NOT NULL, "task_id" bigint NOT NULL REFERENCES "task_task" ("id") DEFERRABLE INITIALLY DEFERRED);
-CREATE UNIQUE INDEX IF NOT EXISTS "task_taskasset_task_id_name_dc8ea9a8_uniq" ON "task_taskasset" ("task_id", "name");
-CREATE INDEX IF NOT EXISTS "task_taskasset_task_id_0921deb6" ON "task_taskasset" ("task_id");
+-- 教程、挑战、自由创作共用一张表，按 task_type 区分；display 是各类型内的序号，用作网址
+CREATE TABLE IF NOT EXISTS tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_type TEXT NOT NULL,
+  display INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  is_public INTEGER NOT NULL DEFAULT 0,
+  -- 挑战
+  score INTEGER NOT NULL DEFAULT 0,
+  pass_score REAL,
+  author_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  -- 自由创作
+  owner_id INTEGER REFERENCES users (id) ON DELETE CASCADE,
+  created TEXT NOT NULL,
+  modified TEXT NOT NULL,
+  -- 大字段放最后：只读前面小列的查询不用读它们的溢出页
+  content TEXT NOT NULL DEFAULT '',
+  example_html TEXT,
+  example_css TEXT,
+  example_js TEXT,
+  -- 自由创作的代码
+  html TEXT,
+  css TEXT,
+  js TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_type_display ON tasks (task_type, display);
+CREATE INDEX IF NOT EXISTS tasks_owner ON tasks (owner_id) WHERE owner_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS tasks_author ON tasks (author_id) WHERE author_id IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS "submission_submission" ("created" datetime NOT NULL, "modified" datetime NOT NULL, "id" char(32) NOT NULL PRIMARY KEY, "score" real NOT NULL, "html" text NULL, "css" text NULL, "js" text NULL, "task_id" bigint NOT NULL REFERENCES "task_task" ("id") DEFERRABLE INITIALLY DEFERRED, "user_id" bigint NOT NULL REFERENCES "account_user" ("id") DEFERRABLE INITIALLY DEFERRED, "flag" varchar(10) NULL, "raw_score" real NOT NULL, "zone" varchar(10) NULL, "view_count" integer unsigned NOT NULL CHECK ("view_count" >= 0));
-CREATE INDEX IF NOT EXISTS "submission_submission_task_id_91e9556b" ON "submission_submission" ("task_id");
-CREATE INDEX IF NOT EXISTS "submission_submission_user_id_71741691" ON "submission_submission" ("user_id");
-CREATE INDEX IF NOT EXISTS "submission_submission_flag_d96bc4aa" ON "submission_submission" ("flag");
-CREATE INDEX IF NOT EXISTS "submission_submission_zone_a1bbf0a2" ON "submission_submission" ("zone");
--- 非 Django 原有：除 html/css/js 外的常用列。user_id 等列在表里排在 html/css/js 后面，
--- 直接读表要先读完整段代码，所以列表、打分、统计等扫描都靠这个覆盖索引
-CREATE INDEX IF NOT EXISTS "submission_submission_slim" ON "submission_submission" ("user_id", "task_id", "created", "score", "flag", "zone", "raw_score", "id");
-CREATE TABLE IF NOT EXISTS "submission_rating" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "score" integer NOT NULL, "created" datetime NOT NULL, "submission_id" char(32) NOT NULL REFERENCES "submission_submission" ("id") DEFERRABLE INITIALLY DEFERRED, "user_id" bigint NOT NULL REFERENCES "account_user" ("id") DEFERRABLE INITIALLY DEFERRED);
-CREATE UNIQUE INDEX IF NOT EXISTS "submission_rating_user_id_submission_id_29be4c39_uniq" ON "submission_rating" ("user_id", "submission_id");
-CREATE INDEX IF NOT EXISTS "submission_rating_submission_id_a20dcece" ON "submission_rating" ("submission_id");
-CREATE INDEX IF NOT EXISTS "submission_rating_user_id_cfd08017" ON "submission_rating" ("user_id");
-CREATE TABLE IF NOT EXISTS "submission_award" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "created" datetime NOT NULL, "modified" datetime NOT NULL, "name" varchar(100) NOT NULL UNIQUE, "description" text NOT NULL, "sort_order" integer NOT NULL, "is_active" bool NOT NULL, "item_ordering" varchar(20) NOT NULL);
-CREATE INDEX IF NOT EXISTS "submission_award_sort_order_280640ce" ON "submission_award" ("sort_order");
-CREATE TABLE IF NOT EXISTS "submission_submissionaward" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "created" datetime NOT NULL, "modified" datetime NOT NULL, "sort_order" integer NOT NULL, "awarded_at" datetime NOT NULL, "award_id" bigint NOT NULL REFERENCES "submission_award" ("id") DEFERRABLE INITIALLY DEFERRED, "submission_id" char(32) NOT NULL REFERENCES "submission_submission" ("id") DEFERRABLE INITIALLY DEFERRED, "is_stale" bool NOT NULL);
-CREATE UNIQUE INDEX IF NOT EXISTS "submission_submissionaward_submission_id_award_id_6fab326b_uniq" ON "submission_submissionaward" ("submission_id", "award_id");
-CREATE INDEX IF NOT EXISTS "submission_submissionaward_sort_order_7d90e1d6" ON "submission_submissionaward" ("sort_order");
-CREATE INDEX IF NOT EXISTS "submission_submissionaward_awarded_at_8093b2c7" ON "submission_submissionaward" ("awarded_at");
-CREATE INDEX IF NOT EXISTS "submission_submissionaward_award_id_b229157e" ON "submission_submissionaward" ("award_id");
-CREATE INDEX IF NOT EXISTS "submission_submissionaward_submission_id_209aabba" ON "submission_submissionaward" ("submission_id");
+CREATE TABLE IF NOT EXISTS task_assets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  file TEXT NOT NULL,
+  UNIQUE (task_id, name)
+);
 
-CREATE TABLE IF NOT EXISTS "prompt_conversation" ("created" datetime NOT NULL, "modified" datetime NOT NULL, "id" char(32) NOT NULL PRIMARY KEY, "is_active" bool NOT NULL, "task_id" bigint NOT NULL REFERENCES "task_task" ("id") DEFERRABLE INITIALLY DEFERRED, "user_id" bigint NOT NULL REFERENCES "account_user" ("id") DEFERRABLE INITIALLY DEFERRED);
-CREATE INDEX IF NOT EXISTS "prompt_conversation_task_id_90287800" ON "prompt_conversation" ("task_id");
-CREATE INDEX IF NOT EXISTS "prompt_conversation_user_id_ecc418b3" ON "prompt_conversation" ("user_id");
-CREATE TABLE IF NOT EXISTS "prompt_message" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "role" varchar(10) NOT NULL, "content" text NOT NULL, "code_html" text NULL, "code_css" text NULL, "code_js" text NULL, "created" datetime NOT NULL, "conversation_id" char(32) NOT NULL REFERENCES "prompt_conversation" ("id") DEFERRABLE INITIALLY DEFERRED, "prompt_level" integer NULL, "source" varchar(12) NOT NULL, "submission_id" char(32) NULL UNIQUE REFERENCES "submission_submission" ("id") DEFERRABLE INITIALLY DEFERRED);
-CREATE INDEX IF NOT EXISTS "prompt_message_conversation_id_af18dd4b" ON "prompt_message" ("conversation_id");
-CREATE INDEX IF NOT EXISTS "prompt_message_prompt_level_e461b596" ON "prompt_message" ("prompt_level");
+-- 提交只放小列，代码在 submission_code：列表、打分、统计扫这张表时不用读代码
+CREATE TABLE IF NOT EXISTS submissions (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  created TEXT NOT NULL,
+  modified TEXT NOT NULL,
+  score REAL NOT NULL DEFAULT 0,
+  raw_score REAL NOT NULL DEFAULT 0,
+  -- pending（评分不到 5 个）/ featured / low / NULL
+  zone TEXT,
+  -- 只用 present：老师课上要展示的
+  flag TEXT,
+  view_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS submissions_user_task ON submissions (user_id, task_id, created);
+CREATE INDEX IF NOT EXISTS submissions_task_user ON submissions (task_id, user_id, created);
+-- 老师课上要展示的提交，只有几百条
+CREATE INDEX IF NOT EXISTS submissions_flag ON submissions (flag) WHERE flag IS NOT NULL;
+CREATE TABLE IF NOT EXISTS submission_code (
+  submission_id TEXT PRIMARY KEY REFERENCES submissions (id) ON DELETE CASCADE,
+  html TEXT,
+  css TEXT,
+  js TEXT
+);
+-- 学生交作品时写的一句反思（最满意的改动和理由）；可以不写
+CREATE TABLE IF NOT EXISTS reflections (
+  submission_id TEXT PRIMARY KEY REFERENCES submissions (id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  modified TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ratings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  submission_id TEXT NOT NULL REFERENCES submissions (id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  score INTEGER NOT NULL,
+  created TEXT NOT NULL,
+  UNIQUE (user_id, submission_id)
+);
+CREATE INDEX IF NOT EXISTS ratings_submission ON ratings (submission_id);
+
+-- 作品展：奖项和获奖作品
+CREATE TABLE IF NOT EXISTS awards (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  -- manual / awarded_at / score / view_count
+  item_ordering TEXT NOT NULL DEFAULT 'manual',
+  created TEXT NOT NULL,
+  modified TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS award_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  award_id INTEGER NOT NULL REFERENCES awards (id) ON DELETE CASCADE,
+  submission_id TEXT NOT NULL REFERENCES submissions (id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  -- 作者后来又交了新版本
+  is_stale INTEGER NOT NULL DEFAULT 0,
+  awarded_at TEXT NOT NULL,
+  created TEXT NOT NULL,
+  modified TEXT NOT NULL,
+  UNIQUE (submission_id, award_id)
+);
+CREATE INDEX IF NOT EXISTS award_items_award ON award_items (award_id);
+
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  task_id INTEGER NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created TEXT NOT NULL,
+  modified TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS conversations_user_task ON conversations (user_id, task_id);
+CREATE INDEX IF NOT EXISTS conversations_task ON conversations (task_id);
+
+-- source：conversation（和 AI 对话）/ edit（手改代码）/ manual（粘贴外部 AI 的代码）/ guidance（“帮我写清楚”）
+-- 学生交的是哪一版：那条 assistant 消息的 submission_id；删提交时这条消息跟着删
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id TEXT NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'conversation',
+  prompt_level INTEGER,
+  submission_id TEXT REFERENCES submissions (id) ON DELETE CASCADE,
+  created TEXT NOT NULL,
+  content TEXT NOT NULL,
+  code_html TEXT,
+  code_css TEXT,
+  code_js TEXT
+);
 -- 课堂总结统计提示词链用的覆盖索引：只读小列，不碰 content / code_*
-CREATE INDEX IF NOT EXISTS "prompt_message_chain" ON "prompt_message" ("conversation_id", "created", "id", "role", "source", "prompt_level");
-CREATE INDEX IF NOT EXISTS "prompt_message_submission" ON "prompt_message" ("submission_id", "conversation_id", "created", "source") WHERE "submission_id" IS NOT NULL;
-
--- 学生交作品时写的一句反思（最满意的改动和理由）；可以不写。删提交时跟着删
-CREATE TABLE IF NOT EXISTS "submission_reflection" ("submission_id" char(32) NOT NULL PRIMARY KEY REFERENCES "submission_submission" ("id") ON DELETE CASCADE, "content" text NOT NULL, "modified" datetime NOT NULL);
+CREATE INDEX IF NOT EXISTS messages_chain ON messages (conversation_id, created, id, role, source, prompt_level);
+CREATE UNIQUE INDEX IF NOT EXISTS messages_submission ON messages (submission_id) WHERE submission_id IS NOT NULL;
 
 -- 登录用 JWT：access token 不落库，refresh token 只存 sha256
-DROP TABLE IF EXISTS "auth_session";
-CREATE TABLE IF NOT EXISTS "auth_refresh_token" ("token_hash" text NOT NULL PRIMARY KEY, "user_id" bigint NOT NULL REFERENCES "account_user" ("id") ON DELETE CASCADE, "expire_at" datetime NOT NULL);
-CREATE INDEX IF NOT EXISTS "auth_refresh_token_user_id" ON "auth_refresh_token" ("user_id");
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  expire_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS refresh_tokens_user ON refresh_tokens (user_id);
 `
+
+// 表结构的版本。改已有的表时加一步：if (version < N) { ...; version = N }
+const SCHEMA_VERSION = 1
 
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true })
@@ -66,8 +175,19 @@ export function openDb(path: string): Database {
   db.run("PRAGMA journal_mode = WAL")
   db.run("PRAGMA synchronous = NORMAL")
   db.run("PRAGMA busy_timeout = 5000")
-  db.run("PRAGMA foreign_keys = ON")
+
+  const version = db.query<{ user_version: number }, []>("PRAGMA user_version").get()!.user_version
+  if (version === 0) {
+    // 旧的 Django 表结构：搬进新表（外键检查要在事务外关掉）
+    const legacy = db.query(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'account_user'`).get()
+    if (legacy) migrateFromDjango(db, SCHEMA)
+    db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`)
+  } else if (version > SCHEMA_VERSION) {
+    throw new Error(`数据库版本 ${version} 比代码新（${SCHEMA_VERSION}），请更新代码`)
+  }
   db.run(SCHEMA)
+
+  db.run("PRAGMA foreign_keys = ON")
   // SQLite 不会自动 ANALYZE，没有统计信息时规划器常挑错索引；0x10002 = 打开时只分析必要的表
   db.run("PRAGMA optimize=0x10002")
   return db
@@ -99,56 +219,30 @@ export function tx<T>(fn: () => T): T {
   return db.transaction(fn)()
 }
 
-// ── 时间：与 Django 在 SQLite 中的存储格式一致（UTC, "YYYY-MM-DD HH:MM:SS.ffffff"）──
+// ── 时间 ──
 
-let lastMicros = 0
+let lastMs = 0
 
-// 严格递增的时间戳，避免同一毫秒内连续插入的消息排序不稳定
+// 严格递增的时间戳（同一毫秒内连续调用往后顺延 1 毫秒），连续插入的消息按时间排序才稳定
 export function now(): string {
-  let micros = Date.now() * 1000
-  if (micros <= lastMicros) micros = lastMicros + 1
-  lastMicros = micros
-  return formatMicros(micros)
+  let ms = Date.now()
+  if (ms <= lastMs) ms = lastMs + 1
+  lastMs = ms
+  return new Date(ms).toISOString()
 }
 
-export function formatMicros(micros: number): string {
-  const d = new Date(Math.floor(micros / 1000))
-  const frac = String(micros % 1_000_000).padStart(6, "0")
-  return d.toISOString().slice(0, 19).replace("T", " ") + "." + frac
-}
+// ── UUID ──
 
-export function toDbTime(d: Date): string {
-  return formatMicros(d.getTime() * 1000)
-}
+const UUID_RE = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i
 
-// 数据库时间 → ISO 8601，格式与 Django 的 JSON 输出一致（毫秒精度，UTC 用 Z）
-export function iso(value: string): string
-export function iso(value: string | null): string | null
-export function iso(value: string | null): string | null {
-  if (!value) return null
-  return value.replace(" ", "T").slice(0, 23) + "Z"
-}
-
-// ── UUID：SQLite 中按 Django 的方式存成 32 位无连字符的十六进制 ──
-
-const UUID_RE =
-  /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i
-
-export function uuidHex(value: string): string | null {
+// 校验并规范成小写、带连字符的形式；不是 UUID 返回 null
+export function uuid(value: string): string | null {
   if (!UUID_RE.test(value)) return null
-  return value.replaceAll("-", "").toLowerCase()
-}
-
-export function uuidOut(hex: string): string
-export function uuidOut(hex: string | null): string | null
-export function uuidOut(hex: string | null): string | null {
-  if (!hex) return null
+  const hex = value.replaceAll("-", "").toLowerCase()
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-export function newUuidHex(): string {
-  return crypto.randomUUID().replaceAll("-", "")
-}
+export const newId = () => crypto.randomUUID()
 
 export function likeEscape(s: string): string {
   return "%" + s.replace(/[\\%_]/g, (m) => "\\" + m) + "%"

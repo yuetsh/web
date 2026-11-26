@@ -105,24 +105,24 @@ async function setup() {
 describe("WebSocket 代码生成", () => {
   test("正常生成：流式返回并保存一问一答", async () => {
     const { task, token } = await setup()
-    const c = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    const c = (await connect(`/ws/prompt/${task}?token=${token}`))!
     expect((await c.next("init")).messages).toEqual([])
     c.ws.send(JSON.stringify({ type: "message", content: "做个页面" }))
     const done = await c.next("complete")
     expect(done.code.html).toBe("<p>hi</p>")
     const streamed = c.msgs.filter((m) => m.type === "stream").map((m) => m.content).join("")
     expect(streamed).toBe(PIECES.join(""))
-    expect(all(`SELECT role FROM prompt_message ORDER BY id`).map((m) => m.role)).toEqual(["user", "assistant"])
+    expect(all(`SELECT role FROM messages ORDER BY id`).map((m) => m.role)).toEqual(["user", "assistant"])
     c.ws.close()
   })
 
   test("回复完后在后台给提问打层级", async () => {
     const { task, token } = await setup()
-    const c = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    const c = (await connect(`/ws/prompt/${task}?token=${token}`))!
     await c.next("init")
     c.ws.send(JSON.stringify({ type: "message", content: "做个页面" }))
     await c.next("complete")
-    const level = () => all(`SELECT prompt_level FROM prompt_message WHERE role = 'user'`)[0]?.prompt_level
+    const level = () => all(`SELECT prompt_level FROM messages WHERE role = 'user'`)[0]?.prompt_level
     for (let i = 0; i < 50 && level() == null; i++) await Bun.sleep(20)
     expect(level()).toBe(3)
     expect(lastClassify.thinking).toEqual({ type: "disabled" })
@@ -131,32 +131,32 @@ describe("WebSocket 代码生成", () => {
 
   test("AI 回复中再发消息会被拒绝", async () => {
     const { task, token } = await setup()
-    const c = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    const c = (await connect(`/ws/prompt/${task}?token=${token}`))!
     await c.next("init")
     c.ws.send(JSON.stringify({ type: "message", content: "第一条" }))
     c.ws.send(JSON.stringify({ type: "message", content: "第二条" }))
     expect((await c.next("error")).content).toContain("上一条消息还在处理")
     await c.next("complete")
-    expect(all(`SELECT content FROM prompt_message WHERE role = 'user'`)).toEqual([{ content: "第一条" }])
+    expect(all(`SELECT content FROM messages WHERE role = 'user'`)).toEqual([{ content: "第一条" }])
     c.ws.close()
   })
 
   test("中途断开：删掉没有回复的提问", async () => {
     const { task, token } = await setup()
-    const c = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    const c = (await connect(`/ws/prompt/${task}?token=${token}`))!
     await c.next("init")
     c.ws.send(JSON.stringify({ type: "message", content: "做个页面" }))
     await c.next("stream")
     c.ws.close()
     await Bun.sleep(400)
-    expect(all(`SELECT * FROM prompt_message`)).toEqual([])
+    expect(all(`SELECT * FROM messages`)).toEqual([])
   })
 
   test("手改的版本进入对话，AI 下一轮在它上面改", async () => {
     makeUser("stu")
     const task = makeTask("挑战")
     const stu = await client("stu")
-    const c = (await connect(`/ws/prompt/${task}/?token=${stu.tokens.access_token}`))!
+    const c = (await connect(`/ws/prompt/${task}?token=${stu.tokens.access_token}`))!
     await c.next("init")
     c.ws.send(JSON.stringify({ type: "message", content: "做个页面" }))
     await c.next("complete")
@@ -183,7 +183,7 @@ describe("WebSocket 代码生成", () => {
   test("只回答问题、没给代码时 code 是 null", async () => {
     const { task, token } = await setup()
     PIECES = ["因为加了 ", "border-radius。"]
-    const c = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    const c = (await connect(`/ws/prompt/${task}?token=${token}`))!
     await c.next("init")
     c.ws.send(JSON.stringify({ type: "message", content: "为什么按钮是圆的？" }))
     const done = await c.next("complete")
@@ -194,8 +194,8 @@ describe("WebSocket 代码生成", () => {
 
   test("挑战的题目要求作为对照清单发给 AI，自由创作不发", async () => {
     const { task, token } = await setup()
-    run(`UPDATE task_task SET content = $c WHERE id = $id`, { c: "做一个计时器，有开始和暂停按钮", id: task })
-    const c = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    run(`UPDATE tasks SET content = $c WHERE id = $id`, { c: "做一个计时器，有开始和暂停按钮", id: task })
+    const c = (await connect(`/ws/prompt/${task}?token=${token}`))!
     await c.next("init")
     c.ws.send(JSON.stringify({ type: "message", content: "做个页面" }))
     await c.next("complete")
@@ -204,8 +204,10 @@ describe("WebSocket 代码生成", () => {
     c.ws.close()
 
     const creation = makeTask("我的作品", "creation", 2)
-    run(`UPDATE task_task SET content = '我想做一个相册' WHERE id = $id`, { id: creation })
-    const d = (await connect(`/ws/prompt/${creation}/?token=${token}`))!
+    run(`UPDATE tasks SET content = '我想做一个相册', owner_id = (SELECT id FROM users WHERE username = 'stu') WHERE id = $id`, {
+      id: creation,
+    })
+    const d = (await connect(`/ws/prompt/${creation}?token=${token}`))!
     await d.next("init")
     d.ws.send(JSON.stringify({ type: "message", content: "做个页面" }))
     await d.next("complete")
@@ -215,22 +217,22 @@ describe("WebSocket 代码生成", () => {
 
   test("token 无效或任务不存在时握手失败", async () => {
     const { task, token } = await setup()
-    expect(await connect(`/ws/prompt/${task}/?token=bad`)).toBeNull()
-    expect(await connect(`/ws/prompt/9999/?token=${token}`)).toBeNull()
+    expect(await connect(`/ws/prompt/${task}?token=bad`)).toBeNull()
+    expect(await connect(`/ws/prompt/9999?token=${token}`)).toBeNull()
   })
 })
 
 describe("WebSocket 帮我写清楚", () => {
   test("教练能看到题目要求、之前的提问和 AI 上一次的说明", async () => {
     const { task, token } = await setup()
-    run(`UPDATE task_task SET content = $c WHERE id = $id`, { c: "做一个计时器，![图](a.png) 有开始和暂停按钮", id: task })
-    const p = (await connect(`/ws/prompt/${task}/?token=${token}`))!
+    run(`UPDATE tasks SET content = $c WHERE id = $id`, { c: "做一个计时器，![图](a.png) 有开始和暂停按钮", id: task })
+    const p = (await connect(`/ws/prompt/${task}?token=${token}`))!
     await p.next("init")
     p.ws.send(JSON.stringify({ type: "message", content: "做个计时器" }))
     await p.next("complete")
     p.ws.close()
 
-    const g = (await connect(`/ws/guidance/${task}/?token=${token}`))!
+    const g = (await connect(`/ws/guidance/${task}?token=${token}`))!
     await g.next("init")
     g.ws.send(JSON.stringify({ type: "message", content: "改成粉色" }))
     await g.next("complete")
@@ -242,7 +244,7 @@ describe("WebSocket 帮我写清楚", () => {
     expect(system.content).not.toContain("<p>hi</p>")
     expect(lastRequest.messages.at(-1)).toEqual({ role: "user", content: "改成粉色" })
     // 等后台打完层级再结束，不然假接口关了它会报错
-    const level = () => all(`SELECT prompt_level FROM prompt_message WHERE source = 'guidance' AND role = 'user'`)[0]?.prompt_level
+    const level = () => all(`SELECT prompt_level FROM messages WHERE source = 'guidance' AND role = 'user'`)[0]?.prompt_level
     for (let i = 0; i < 50 && level() == null; i++) await Bun.sleep(20)
     g.ws.close()
   })

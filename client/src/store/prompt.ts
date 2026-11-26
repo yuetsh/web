@@ -91,7 +91,7 @@ const socket = new ReconnectingSocket({
 
 export function connectPrompt(taskId: number) {
   currentTaskId.value = taskId
-  socket.connect(`/ws/prompt/${taskId}/`)
+  socket.connect(`/ws/prompt/${taskId}`)
 }
 
 export function disconnectPrompt() {

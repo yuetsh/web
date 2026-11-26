@@ -1,5 +1,4 @@
 import { all } from "../db"
-import { uuidOut } from "../db"
 import { HttpError } from "../http"
 import { pyRound, pySum } from "./pyround"
 
@@ -95,12 +94,12 @@ export function buildGradebook(filters: GradebookFilters): Gradebook {
   if (!classname) throw new HttpError(400, "请选择班级")
 
   const classes = all<{ classname: string }>(
-    `SELECT DISTINCT classname FROM account_user
+    `SELECT DISTINCT classname FROM users
      WHERE role IN ('normal', 'admin') AND classname != '' ORDER BY classname`,
   ).map((r) => r.classname)
 
   const students = all<{ id: number; username: string; classname: string }>(
-    `SELECT id, username, classname FROM account_user
+    `SELECT id, username, classname FROM users
      WHERE role IN ('normal', 'admin') AND classname = $classname
      ORDER BY username, id`,
     { classname },
@@ -113,9 +112,9 @@ export function buildGradebook(filters: GradebookFilters): Gradebook {
 
   const taskRows = all<{ id: number; display: number; title: string; task_type: string; submitted_count: number }>(
     `SELECT t.id, t.display, t.title, t.task_type, COUNT(DISTINCT s.user_id) AS submitted_count
-     FROM submission_submission s
-     JOIN task_task t ON t.id = s.task_id
-     JOIN account_user u ON u.id = s.user_id
+     FROM submissions s
+     JOIN tasks t ON t.id = s.task_id
+     JOIN users u ON u.id = s.user_id
      WHERE u.role IN ('normal', 'admin') AND u.classname = $classname ${typeFilter}
      GROUP BY t.id`,
     { classname, ...typeParams },
@@ -146,7 +145,7 @@ export function buildGradebook(filters: GradebookFilters): Gradebook {
   if (studentCount && visibleTaskIds.size) {
     const subs = all<{ id: string; user_id: number; task_id: number; score: number }>(
       `SELECT s.id, s.user_id, s.task_id, s.score
-       FROM submission_submission s JOIN account_user u ON u.id = s.user_id
+       FROM submissions s JOIN users u ON u.id = s.user_id
        WHERE u.role IN ('normal', 'admin') AND u.classname = $classname
        ORDER BY s.user_id, s.task_id, s.score DESC, s.created DESC, s.id DESC`,
       { classname },
@@ -172,7 +171,7 @@ export function buildGradebook(filters: GradebookFilters): Gradebook {
       scores[task.id] = {
         score: cellScore,
         submitted: !!sub,
-        submission_id: sub ? uuidOut(sub.id) : null,
+        submission_id: sub ? sub.id : null,
       }
       if (!task.included) continue
       if (sub) {

@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { z } from "zod"
-import { all, get, run, tx, now, iso, likeEscape, newUuidHex, uuidHex, uuidOut } from "../db"
+import { all, get, run, tx, now, likeEscape, newId, uuid } from "../db"
 import { Role, isStaff, requireSuper, requireUser, type User } from "../auth"
 import {
   HttpError,
@@ -16,7 +16,7 @@ import {
   type Env,
   uuidParam,
 } from "../http"
-import { deleteRound, deleteSubmissions, hasRatingsOrAwards } from "../services/cascade"
+import { deleteRound, hasRatingsOrAwards } from "../services/cascade"
 import { updateSubmissionScore } from "../services/score"
 import { classifyMessage, inBackground } from "../services/classifier"
 import { buildGradebook, gradebookCsvRows, toCsv } from "../services/gradebook"
@@ -38,14 +38,14 @@ const router = new Hono<Env>()
 router.route("/showcase", showcase)
 router.route("/review", review)
 
-const inShowcase = (id: string) => !!get(`SELECT 1 FROM submission_submissionaward WHERE submission_id = $id`, { id })
+const inShowcase = (id: string) => !!get(`SELECT 1 FROM award_items WHERE submission_id = $id`, { id })
 
 // 学生能看的提交：自己的、进了作品展的、自己也交过的那道题上同学（任何班）的。老师都能看
 function canView(user: User, sub: { id: string; user_id: number; task_id: number }) {
   if (isStaff(user) || sub.user_id === user.id) return true
   if (inShowcase(sub.id)) return true
   return !!get(
-    `SELECT 1 FROM submission_submission s WHERE s.user_id = $me AND s.task_id = $task_id LIMIT 1`,
+    `SELECT 1 FROM submissions WHERE user_id = $me AND task_id = $task_id LIMIT 1`,
     { me: user.id, task_id: sub.task_id },
   )
 }
@@ -53,7 +53,7 @@ function canView(user: User, sub: { id: string; user_id: number; task_id: number
 function requireView(user: User, id: string) {
   const sub = orNotFound(
     get<{ id: string; user_id: number; task_id: number }>(
-      `SELECT id, user_id, task_id FROM submission_submission WHERE id = $id`,
+      `SELECT id, user_id, task_id FROM submissions WHERE id = $id`,
       { id },
     ),
   )
@@ -65,28 +65,31 @@ function todayRatingCount(userId: number) {
   const start = new Date()
   start.setUTCHours(0, 0, 0, 0)
   const end = new Date(start.getTime() + 86_400_000)
-  const fmt = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ") + ".000000"
   return get<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM submission_rating
-     WHERE user_id = $id AND created >= $start AND created <= $end`,
-    { id: userId, start: fmt(start), end: fmt(end) },
+    `SELECT COUNT(*) AS n FROM ratings
+     WHERE user_id = $id AND created >= $start AND created < $end`,
+    { id: userId, start: start.toISOString(), end: end.toISOString() },
   )!.n
 }
 
 const SUBMISSION_SELECT = `SELECT s.id, s.user_id, u.username, s.task_id, t.display AS task_display,
-    t.title AS task_title, t.task_type, s.score, s.html, s.css, s.js, s.flag, s.zone,
+    t.title AS task_title, t.task_type, s.score, code.html, code.css, code.js, s.flag, s.zone,
     s.view_count, s.created, s.modified,
-    (SELECT r.score FROM submission_rating r WHERE r.user_id = $me AND r.submission_id = s.id LIMIT 1) AS my_score`
+    (SELECT r.score FROM ratings r WHERE r.user_id = $me AND r.submission_id = s.id) AS my_score`
 
-// +s.task_id：不让 SQLite 从 task_task 出发、用 task_id 单列索引去找提交（那样要回表读
-// html/css/js 大行，6 万条提交时列表要几百毫秒），改走 slim 覆盖索引；按 task_id 筛选不受影响
-const SUBMISSION_FROM = `FROM submission_submission s
-  JOIN account_user u ON u.id = s.user_id
-  JOIN task_task t ON t.id = +s.task_id`
+// +s.task_id：不让 SQLite 先遍历所有任务、再按 submissions_task_user 索引逐条回表
+// （按 zone 等非索引列筛选时要几百毫秒），而是直接扫 submissions（表里没有代码，扫一遍很快）。
+// WHERE 里的 s.task_id = 不受影响，照样走索引
+const SUBMISSION_FROM = `FROM submissions s
+  JOIN users u ON u.id = s.user_id
+  JOIN tasks t ON t.id = +s.task_id`
+
+// 代码在另一张表，只在读这一页的完整内容时才连上
+const WITH_CODE = `LEFT JOIN submission_code code ON code.submission_id = s.id`
 
 function submissionOut(s: any) {
   return {
-    id: uuidOut(s.id),
+    id: s.id,
     userid: s.user_id,
     username: s.username,
     task_id: s.task_id,
@@ -102,8 +105,8 @@ function submissionOut(s: any) {
     zone: s.zone,
     submit_count: s.submit_count || 0,
     view_count: s.view_count,
-    created: iso(s.created),
-    modified: iso(s.modified),
+    created: s.created,
+    modified: s.modified,
   }
 }
 
@@ -124,7 +127,7 @@ router.post("/", async (c) => {
     }),
   )
   const task = orNotFound(
-    get<{ id: number; task_type: string }>(`SELECT id, task_type FROM task_task WHERE id = $id`, {
+    get<{ id: number; task_type: string }>(`SELECT id, task_type FROM tasks WHERE id = $id`, {
       id: p.task_id,
     }),
   )
@@ -159,7 +162,7 @@ router.post("/", async (c) => {
       })
     } else if (p.message_id) {
       linkedMsg = get<MessageRow>(
-        `SELECT m.* FROM prompt_message m JOIN prompt_conversation c ON c.id = m.conversation_id
+        `SELECT m.* FROM messages m JOIN conversations c ON c.id = m.conversation_id
          WHERE m.id = $id AND m.role = 'assistant' AND c.user_id = $user_id AND c.task_id = $task_id`,
         { id: p.message_id, user_id: user.id, task_id: task.id },
       )
@@ -175,32 +178,34 @@ router.post("/", async (c) => {
     // 同一条 AI 消息重复提交时更新原来的提交，而不是再建一条
     if (linkedMsg?.submission_id) {
       run(
-        `UPDATE submission_submission SET html = $html, css = $css, js = $js WHERE id = $id`,
+        `UPDATE submission_code SET html = $html, css = $css, js = $js WHERE submission_id = $id`,
         { ...code, id: linkedMsg.submission_id },
       )
       return { submissionId: linkedMsg.submission_id, newUserMsgId }
     }
 
-    const id = newUuidHex()
+    const id = newId()
     const ts = now()
     run(
-      `INSERT INTO submission_submission
-         (id, created, modified, score, html, css, js, task_id, user_id, flag, raw_score, zone, view_count)
-       VALUES ($id, $ts, $ts, 0, $html, $css, $js, $task_id, $user_id, NULL, 0, NULL, 0)`,
-      { id, ts, ...code, task_id: task.id, user_id: user.id },
+      `INSERT INTO submissions (id, user_id, task_id, created, modified) VALUES ($id, $user_id, $task_id, $ts, $ts)`,
+      { id, ts, task_id: task.id, user_id: user.id },
     )
+    run(`INSERT INTO submission_code (submission_id, html, css, js) VALUES ($id, $html, $css, $js)`, {
+      id,
+      ...code,
+    })
     const msgToLink = manualAsstMsgId ?? linkedMsg?.id
     if (msgToLink) {
-      run(`UPDATE prompt_message SET submission_id = $sid WHERE id = $mid`, {
+      run(`UPDATE messages SET submission_id = $sid WHERE id = $mid`, {
         sid: id,
         mid: msgToLink,
       })
     }
     // 该学生该任务之前进入作品展的提交标记为“有更新”
     run(
-      `UPDATE submission_submissionaward SET is_stale = 1
+      `UPDATE award_items SET is_stale = 1
        WHERE is_stale = 0 AND submission_id != $id AND submission_id IN
-         (SELECT id FROM submission_submission WHERE user_id = $user_id AND task_id = $task_id)`,
+         (SELECT id FROM submissions WHERE user_id = $user_id AND task_id = $task_id)`,
       { id, user_id: user.id, task_id: task.id },
     )
     return { submissionId: id, newUserMsgId }
@@ -209,7 +214,7 @@ router.post("/", async (c) => {
   // 同一版再交时没写就留着上次写的
   if (reflection) {
     run(
-      `INSERT INTO submission_reflection (submission_id, content, modified) VALUES ($id, $content, $ts)
+      `INSERT INTO reflections (submission_id, content, modified) VALUES ($id, $content, $ts)
        ON CONFLICT (submission_id) DO UPDATE SET content = excluded.content, modified = excluded.modified`,
       { id: submissionId, content: reflection, ts: now() },
     )
@@ -218,14 +223,14 @@ router.post("/", async (c) => {
   // 只对新增的提示词做层级分类
   if (
     newUserMsgId !== null &&
-    !get(`SELECT 1 FROM prompt_message WHERE id = $id AND prompt_level IS NOT NULL`, {
+    !get(`SELECT 1 FROM messages WHERE id = $id AND prompt_level IS NOT NULL`, {
       id: newUserMsgId,
     })
   ) {
     inBackground(classifyMessage(newUserMsgId))
   }
 
-  return c.json({ id: uuidOut(submissionId) })
+  return c.json({ id: submissionId })
 })
 
 // ── 列表 ──────────────────────────────────────────────────────────────────────
@@ -251,7 +256,7 @@ router.get("/", (c) => {
   const params: Record<string, unknown> = {}
 
   if (f.task_id) {
-    orNotFound(get(`SELECT 1 FROM task_task WHERE id = $id`, { id: f.task_id }))
+    orNotFound(get(`SELECT 1 FROM tasks WHERE id = $id`, { id: f.task_id }))
     where.push("s.task_id = $task_id")
     params.task_id = f.task_id
   } else if (f.task_type) {
@@ -272,14 +277,13 @@ router.get("/", (c) => {
       params.user_id = f.user_id
     }
   }
-  // flag / zone 前的一元 + 让 SQLite 不用这两列的单列索引（那样要回表读大行），改走 slim 覆盖索引
-  if (f.flag === "any") where.push("+s.flag IS NOT NULL")
+  if (f.flag === "any") where.push("s.flag IS NOT NULL")
   else if (f.flag) {
-    where.push("+s.flag = $flag")
+    where.push("s.flag = $flag")
     params.flag = f.flag
   }
   if (f.zone) {
-    where.push("+s.zone = $zone")
+    where.push("s.zone = $zone")
     params.zone = f.zone
   }
   if (f.score_lt_threshold !== undefined) {
@@ -297,8 +301,8 @@ router.get("/", (c) => {
   }
   if (f.grouped) {
     // 分组模式：每个 (user, task) 只保留最新一条
-    // 用 rowid 而不是 id，这样子查询能完全走 submission_submission_slim 覆盖索引
-    where.push(`s.rowid = (SELECT s3.rowid FROM submission_submission s3
+    // 比 rowid 而不是 id：子查询只走 submissions_user_task 索引，不用回表
+    where.push(`s.rowid = (SELECT s3.rowid FROM submissions s3
       WHERE s3.user_id = s.user_id AND s3.task_id = s.task_id ORDER BY s3.created DESC LIMIT 1)`)
   }
 
@@ -312,13 +316,13 @@ router.get("/", (c) => {
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : ""
   const { limit, offset } = pageWindow(f)
 
-  // 先只在索引上排序分页拿到这一页的 rowid，再读这几行的完整内容；
-  // 否则排序时要把每条提交的 html/css/js 大行都读一遍
+  // 先排序分页拿到这一页的 rowid，再读这几行的代码和子查询；
+  // 否则 SQLite 会先为每一条符合条件的提交算好所有输出列（包括读代码）再排序
   const items = all(
     `${SUBMISSION_SELECT},
-       (SELECT COUNT(*) FROM submission_submission s2
+       (SELECT COUNT(*) FROM submissions s2
         WHERE s2.user_id = s.user_id AND s2.task_id = s.task_id) AS submit_count
-     ${SUBMISSION_FROM}
+     ${SUBMISSION_FROM} ${WITH_CODE}
      WHERE s.rowid IN (SELECT s.rowid ${SUBMISSION_FROM} ${whereSql}
                        ORDER BY ${orderBy} LIMIT $limit OFFSET $offset)
      ORDER BY ${orderBy}`,
@@ -333,7 +337,7 @@ router.get("/by-user-task", (c) => {
   const q = query(c, z.object({ user_id: qs.int, task_id: qs.int }))
   if (me.role === Role.NORMAL && q.user_id !== me.id) throw new HttpError(403, "没有权限")
   const rows = all(
-    `${SUBMISSION_SELECT} ${SUBMISSION_FROM}
+    `${SUBMISSION_SELECT} ${SUBMISSION_FROM} ${WITH_CODE}
      WHERE s.user_id = $user_id AND s.task_id = $task_id ORDER BY s.created DESC`,
     { me: me.id, user_id: q.user_id, task_id: q.task_id },
   )
@@ -346,47 +350,46 @@ router.get("/random-for-rating", (c) => {
   const q = query(c, z.object({ exclude_id: qs.opt(z.string()) }))
   let excludeId: string | null = null
   if (q.exclude_id) {
-    excludeId = uuidHex(q.exclude_id)
+    excludeId = uuid(q.exclude_id)
     if (!excludeId) throw new ValidationError([{ loc: ["query", "exclude_id"], msg: "需要 UUID" }])
   }
   if (user.role === Role.NORMAL && todayRatingCount(user.id) >= 30) return c.json(null)
 
   // 学生只抽自己也交过的题（和同学作品一样，没交过的题不能看别人的答案）
   const cond = `s.user_id != $me
-      ${user.role === Role.NORMAL ? "AND +s.task_id IN (SELECT task_id FROM submission_submission WHERE user_id = $me)" : ""}
-      AND NOT EXISTS (SELECT 1 FROM submission_rating r WHERE r.submission_id = s.id AND r.user_id = $me)
+      ${user.role === Role.NORMAL ? "AND s.task_id IN (SELECT task_id FROM submissions WHERE user_id = $me)" : ""}
+      AND NOT EXISTS (SELECT 1 FROM ratings r WHERE r.submission_id = s.id AND r.user_id = $me)
       ${excludeId ? "AND s.id != $exclude" : ""}`
   const params = { me: user.id, ...(excludeId ? { exclude: excludeId } : {}) }
-  const fewRatings = `(SELECT COUNT(*) FROM submission_rating r WHERE r.submission_id = s.id) < 5`
+  const fewRatings = `(SELECT COUNT(*) FROM ratings r WHERE r.submission_id = s.id) < 5`
   // 每个学生生成代码时都会调这个接口，ORDER BY RANDOM() 要把所有提交过一遍（6 万条约 50ms，期间整个服务都卡住）。
   // 先随机抽几十个 rowid 试试，抽到评分少于 5 个的就用；抽不中再退回全表随机
-  const maxRowid = get<{ m: number | null }>(`SELECT MAX(rowid) AS m FROM submission_submission`)!.m ?? 0
+  const maxRowid = get<{ m: number | null }>(`SELECT MAX(rowid) AS m FROM submissions`)!.m ?? 0
   let picked: { rid: number } | null = null
   for (let round = 0; round < 3 && maxRowid && !picked; round++) {
     const sample = Array.from({ length: 64 }, () => 1 + Math.floor(Math.random() * maxRowid))
     // 抽样作为参数传入（SQL 文本固定，db.query 按文本缓存语句，拼进 SQL 会让缓存越来越大）
     picked = get<{ rid: number }>(
-      `SELECT s.rowid AS rid FROM submission_submission s
+      `SELECT s.rowid AS rid FROM submissions s
        WHERE s.rowid IN (SELECT value FROM json_each($sample)) AND ${cond} AND ${fewRatings}
        ORDER BY RANDOM() LIMIT 1`,
       { ...params, sample: JSON.stringify(sample) },
     )
   }
-  // 只在索引上随机挑出 rowid，再读这一行的代码；否则每个候选都要读一遍 html/css/js
-  const base = `SELECT s.rowid AS rid FROM submission_submission s WHERE ${cond}`
+  const base = `SELECT s.rowid AS rid FROM submissions s WHERE ${cond}`
   picked ??=
     get<{ rid: number }>(`${base} AND ${fewRatings} ORDER BY RANDOM() LIMIT 1`, params) ??
     get<{ rid: number }>(`${base} ORDER BY RANDOM() LIMIT 1`, params)
   if (!picked) return c.json(null)
   const pick = get(
     `SELECT s.id, t.title AS task_title, t.display AS task_display,
-       t.task_type, s.html, s.css, s.js
-     ${SUBMISSION_FROM} WHERE s.rowid = $rid`,
+       t.task_type, code.html, code.css, code.js
+     ${SUBMISSION_FROM} ${WITH_CODE} WHERE s.rowid = $rid`,
     { rid: picked.rid },
   )!
   // 打分前不告诉作者是谁（打完分 PUT /:id/score 会返回）
   return c.json({
-    submission_id: uuidOut(pick.id),
+    submission_id: pick.id,
     task_title: pick.task_title,
     task_display: pick.task_display,
     task_type: pick.task_type,
@@ -403,16 +406,16 @@ router.get("/stats/:task_id", (c) => {
   if (!isStaff(user)) throw new HttpError(403, "没有权限")
   const taskId = intParam(c, "task_id")
   const { classname } = query(c, z.object({ classname: qs.opt(z.string()) }))
-  orNotFound(get(`SELECT 1 FROM task_task WHERE id = $id`, { id: taskId }))
+  orNotFound(get(`SELECT 1 FROM tasks WHERE id = $id`, { id: taskId }))
 
   const classes = all<{ classname: string }>(
-    `SELECT DISTINCT classname FROM account_user
+    `SELECT DISTINCT classname FROM users
      WHERE role = 'normal' AND classname != '' ORDER BY classname`,
   ).map((r) => r.classname)
 
   // 学生范围：普通用户，可按班级过滤
   const students = all<{ id: number; username: string; classname: string }>(
-    `SELECT id, username, classname FROM account_user
+    `SELECT id, username, classname FROM users
      WHERE role = 'normal' ${classname ? "AND classname = $classname" : ""}
      ORDER BY classname, username`,
     classname ? { classname } : {},
@@ -420,7 +423,7 @@ router.get("/stats/:task_id", (c) => {
   const studentIds = new Set(students.map((s) => s.id))
 
   const subs = all<{ id: string; user_id: number; created: string; score: number; flag: string | null }>(
-    `SELECT id, user_id, created, score, flag FROM submission_submission WHERE task_id = $id`,
+    `SELECT id, user_id, created, score, flag FROM submissions WHERE task_id = $id`,
     { id: taskId },
   )
   const studentSubs = subs.filter((s) => studentIds.has(s.user_id))
@@ -443,8 +446,8 @@ router.get("/stats/:task_id", (c) => {
   // 未评分：提交过但该任务下所有提交都没人打分
   const ratedIds = new Set(
     all<{ user_id: number }>(
-      `SELECT DISTINCT s.user_id FROM submission_rating r
-       JOIN submission_submission s ON s.id = r.submission_id WHERE s.task_id = $id`,
+      `SELECT DISTINCT s.user_id FROM ratings r
+       JOIN submissions s ON s.id = r.submission_id WHERE s.task_id = $id`,
       { id: taskId },
     ).map((r) => r.user_id),
   )
@@ -472,7 +475,7 @@ router.get("/stats/:task_id", (c) => {
   const topScored = [...best.values()]
     .sort((a, b) => b.score - a.score || (a.created < b.created ? -1 : 1))
     .slice(0, 5)
-    .map((s) => ({ ...tag(studentById.get(s.user_id)!), score: s.score, submission_id: uuidOut(s.id) }))
+    .map((s) => ({ ...tag(studentById.get(s.user_id)!), score: s.score, submission_id: s.id }))
 
   const unrated = students.filter((s) => submittedIds.has(s.id) && !ratedIds.has(s.id))
   return c.json({
@@ -521,7 +524,7 @@ router.delete("/:id", (c) => {
   const user = requireUser(c)
   const id = uuidParam(c, "id")
   const sub = orNotFound(
-    get<{ user_id: number }>(`SELECT user_id FROM submission_submission WHERE id = $id`, { id }),
+    get<{ user_id: number }>(`SELECT user_id FROM submissions WHERE id = $id`, { id }),
   )
   if (sub.user_id !== user.id && user.role !== Role.SUPER) {
     throw new HttpError(403, "只能删除自己的提交")
@@ -529,12 +532,10 @@ router.delete("/:id", (c) => {
   if (user.role !== Role.SUPER && hasRatingsOrAwards(id)) {
     throw new HttpError(400, "该提交已被评分或获奖，无法删除")
   }
-  tx(() => {
-    // 有关联的 AI 回复时，回复和它前面的提问一起删掉
-    const asst = get<MessageRow>(`SELECT * FROM prompt_message WHERE submission_id = $id`, { id })
-    if (asst) deleteRound(asst)
-    else deleteSubmissions("id = $id", { id })
-  })
+  // 有关联的 AI 回复时，回复和它前面的提问一起删掉
+  const asst = get<MessageRow>(`SELECT * FROM messages WHERE submission_id = $id`, { id })
+  if (asst) deleteRound(asst)
+  else run(`DELETE FROM submissions WHERE id = $id`, { id })
   return c.json({ message: "删除成功" })
 })
 
@@ -542,7 +543,7 @@ router.get("/:id/prompt-chain", (c) => {
   const user = requireUser(c)
   const id = uuidParam(c, "id")
   requireView(user, id)
-  const msg = get<MessageRow>(`SELECT * FROM prompt_message WHERE submission_id = $id`, { id })
+  const msg = get<MessageRow>(`SELECT * FROM messages WHERE submission_id = $id`, { id })
   if (!msg) throw new HttpError(404, "该提交没有关联提示词链")
   return c.json(buildPromptRounds(msg))
 })
@@ -551,11 +552,13 @@ router.get("/:id", (c) => {
   const user = requireUser(c)
   const id = uuidParam(c, "id")
   requireView(user, id)
-  const s = orNotFound(get(`${SUBMISSION_SELECT} ${SUBMISSION_FROM} WHERE s.id = $id`, { me: user.id, id }))
+  const s = orNotFound(
+    get(`${SUBMISSION_SELECT} ${SUBMISSION_FROM} ${WITH_CODE} WHERE s.id = $id`, { me: user.id, id }),
+  )
   // 反思只给老师和作者本人看
   const reflection =
     isStaff(user) || s.user_id === user.id
-      ? (get<{ content: string }>(`SELECT content FROM submission_reflection WHERE submission_id = $id`, { id })
+      ? (get<{ content: string }>(`SELECT content FROM reflections WHERE submission_id = $id`, { id })
           ?.content ?? null)
       : null
   const out = { ...submissionOut(s), reflection }
@@ -570,7 +573,7 @@ router.get("/:id", (c) => {
 router.post("/:id/view", (c) => {
   requireUser(c)
   const id = uuidParam(c, "id")
-  const res = run(`UPDATE submission_submission SET view_count = view_count + 1 WHERE id = $id`, { id })
+  const res = run(`UPDATE submissions SET view_count = view_count + 1 WHERE id = $id`, { id })
   if (!res.changes) notFound("提交不存在")
   return c.json({ ok: true })
 })
@@ -583,14 +586,14 @@ router.put("/:id/score", async (c) => {
   requireView(user, id)
   const sub = orNotFound(
     get<{ user_id: number; username: string }>(
-      `SELECT s.user_id, u.username FROM submission_submission s
-       JOIN account_user u ON u.id = s.user_id WHERE s.id = $id`,
+      `SELECT s.user_id, u.username FROM submissions s
+       JOIN users u ON u.id = s.user_id WHERE s.id = $id`,
       { id },
     ),
   )
   if (sub.user_id === user.id) throw new HttpError(400, "不能给自己的提交打分")
 
-  const exists = get(`SELECT 1 FROM submission_rating WHERE user_id = $user_id AND submission_id = $id`, {
+  const exists = get(`SELECT 1 FROM ratings WHERE user_id = $user_id AND submission_id = $id`, {
     user_id: user.id,
     id,
   })
@@ -600,8 +603,7 @@ router.put("/:id/score", async (c) => {
   }
   tx(() => {
     run(
-      `INSERT INTO submission_rating (score, created, submission_id, user_id)
-       VALUES ($score, $ts, $id, $user_id)`,
+      `INSERT INTO ratings (submission_id, user_id, score, created) VALUES ($id, $user_id, $score, $ts)`,
       { score, ts: now(), id, user_id: user.id },
     )
     updateSubmissionScore(id)
@@ -620,8 +622,8 @@ router.put("/:id/flag", async (c) => {
       flag: z.enum(["present", "red", "blue", "green", "yellow"]).nullable().default(null),
     }),
   )
-  orNotFound(get(`SELECT 1 FROM submission_submission WHERE id = $id`, { id }))
-  run(`UPDATE submission_submission SET flag = $flag WHERE id = $id`, { flag, id })
+  orNotFound(get(`SELECT 1 FROM submissions WHERE id = $id`, { id }))
+  run(`UPDATE submissions SET flag = $flag WHERE id = $id`, { flag, id })
   return c.json({ flag })
 })
 

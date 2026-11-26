@@ -27,7 +27,7 @@ if (values["task-id"]) {
 if (!values.force) where.push("m.prompt_level IS NULL")
 
 const ids = all<{ id: number }>(
-  `SELECT m.id FROM prompt_message m JOIN prompt_conversation c ON c.id = m.conversation_id
+  `SELECT m.id FROM messages m JOIN conversations c ON c.id = m.conversation_id
    WHERE ${where.join(" AND ")} ORDER BY m.created, m.id`,
   params,
 ).map((r) => r.id)

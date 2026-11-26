@@ -7,7 +7,7 @@
  *
  * 层级是打标签时的标准；分类标准改过以后，先跑 classify-prompts.ts --force 重打，前后才好比。
  */
-import { all, toDbTime } from "../src/db"
+import { all } from "../src/db"
 
 const args = process.argv.slice(2)
 const opt = (name: string) => {
@@ -19,8 +19,8 @@ if (!split || !/^\d{4}-\d{2}-\d{2}$/.test(split)) {
   console.log("用法：bun scripts/prompt-stats.ts <分界日期> [--from 日期] [--to 日期]")
   process.exit(1)
 }
-const day = (d: string) => toDbTime(new Date(`${d}T00:00:00+08:00`))
-const nextDay = (d: string) => toDbTime(new Date(new Date(`${d}T00:00:00+08:00`).getTime() + 86_400_000))
+const day = (d: string) => new Date(`${d}T00:00:00+08:00`).toISOString()
+const nextDay = (d: string) => new Date(new Date(`${d}T00:00:00+08:00`).getTime() + 86_400_000).toISOString()
 const periods = [
   { name: `${opt("--from") ?? "最早"} ~ ${split} 之前`, from: opt("--from") ? day(opt("--from")!) : "", to: day(split) },
   { name: `${split} ~ ${opt("--to") ?? "现在"}`, from: day(split), to: opt("--to") ? nextDay(opt("--to")!) : "9999" },
@@ -46,12 +46,12 @@ const msgs = all<Msg>(
   `SELECT conversation_id, source, content, prompt_level, created,
      CASE WHEN source = 'conversation'
        THEN ROW_NUMBER() OVER (PARTITION BY conversation_id, source = 'conversation' ORDER BY created, id) END AS round
-   FROM prompt_message WHERE role = 'user'`,
+   FROM messages WHERE role = 'user'`,
 )
 const subs = all<{ created: string; reflected: number }>(
   `SELECT s.created, r.submission_id IS NOT NULL AS reflected
-   FROM submission_submission s JOIN task_task t ON t.id = s.task_id
-   LEFT JOIN submission_reflection r ON r.submission_id = s.id
+   FROM submissions s JOIN tasks t ON t.id = s.task_id
+   LEFT JOIN reflections r ON r.submission_id = s.id
    WHERE t.task_type = 'challenge'`,
 )
 

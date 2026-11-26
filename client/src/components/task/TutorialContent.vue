@@ -47,8 +47,8 @@ async function render() {
   const data = await Tutorial.get(step.value)
   if (seq !== renderSeq) return
   // 这一节写过代码就接着写，没写过才放示例代码（以前每次切换都会被示例覆盖）
-  const saved = readTaskCode(data.task_ptr)
-  taskId.value = data.task_ptr
+  const saved = readTaskCode(data.id)
+  taskId.value = data.id
   assetBaseUrl.value = `/media/tasks/tutorial/${step.value}/`
   html.value = saved?.html ?? data.example_html ?? ""
   css.value = saved?.css ?? data.example_css ?? ""

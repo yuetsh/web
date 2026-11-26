@@ -7,9 +7,9 @@ import { all, get } from "../src/db"
 import { updateSubmissionScore } from "../src/services/score"
 
 const rows = all<{ id: string; username: string; title: string; score: number }>(
-  `SELECT s.id, u.username, t.title, s.score FROM submission_submission s
-   JOIN account_user u ON u.id = s.user_id JOIN task_task t ON t.id = s.task_id
-   WHERE EXISTS (SELECT 1 FROM submission_rating r WHERE r.submission_id = s.id)
+  `SELECT s.id, u.username, t.title, s.score FROM submissions s
+   JOIN users u ON u.id = s.user_id JOIN tasks t ON t.id = s.task_id
+   WHERE EXISTS (SELECT 1 FROM ratings r WHERE r.submission_id = s.id)
    ORDER BY s.created DESC`,
 )
 console.log(`找到 ${rows.length} 个被评过分的提交`)
@@ -18,7 +18,7 @@ if (process.argv.includes("--dry-run")) process.exit(0)
 for (const [i, s] of rows.entries()) {
   updateSubmissionScore(s.id)
   const after = get<{ score: number; zone: string | null }>(
-    `SELECT score, zone FROM submission_submission WHERE id = $id`,
+    `SELECT score, zone FROM submissions WHERE id = $id`,
     { id: s.id },
   )!
   console.log(

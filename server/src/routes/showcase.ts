@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { z } from "zod"
-import { all, get, run, tx, now, iso, uuidHex, uuidOut } from "../db"
+import { all, get, run, now, uuid } from "../db"
 import { requireAdmin, requireUser } from "../auth"
 import { HttpError, ValidationError, body, bool, intParam, orNotFound, uuidParam, type Ctx, type Env } from "../http"
 import { buildPromptRounds, type MessageRow } from "../services/prompt"
@@ -17,20 +17,21 @@ const ORDER_BY: Record<string, string> = {
   view_count: "s.view_count DESC, sa.sort_order, sa.id",
 }
 
-const HAS_CHAIN = `EXISTS (SELECT 1 FROM prompt_message m WHERE m.submission_id = s.id) AS has_prompt_chain`
+const HAS_CHAIN = `EXISTS (SELECT 1 FROM messages m WHERE m.submission_id = s.id) AS has_prompt_chain`
 
 const ITEM_SELECT = `SELECT sa.id, sa.submission_id, sa.sort_order, sa.awarded_at, sa.is_stale,
     u.username, t.title AS task_title, t.display AS task_display, t.task_type,
-    s.score, s.view_count, s.html, s.css, s.js, ${HAS_CHAIN}
-  FROM submission_submissionaward sa
-  JOIN submission_submission s ON s.id = sa.submission_id
-  JOIN account_user u ON u.id = s.user_id
-  JOIN task_task t ON t.id = s.task_id`
+    s.score, s.view_count, code.html, code.css, code.js, ${HAS_CHAIN}
+  FROM award_items sa
+  JOIN submissions s ON s.id = sa.submission_id
+  LEFT JOIN submission_code code ON code.submission_id = s.id
+  JOIN users u ON u.id = s.user_id
+  JOIN tasks t ON t.id = s.task_id`
 
 function itemManageOut(r: any) {
   return {
     id: r.id,
-    submission_id: uuidOut(r.submission_id),
+    submission_id: r.submission_id,
     username: r.username,
     task_title: r.task_title,
     task_display: r.task_display,
@@ -38,7 +39,7 @@ function itemManageOut(r: any) {
     score: r.score,
     view_count: r.view_count,
     sort_order: r.sort_order,
-    awarded_at: iso(r.awarded_at),
+    awarded_at: r.awarded_at,
     has_prompt_chain: bool(r.has_prompt_chain),
     is_stale: bool(r.is_stale),
     // 管理页的缩略图要用
@@ -62,8 +63,8 @@ function awardManageOut(a: any) {
   }
 }
 
-const AWARD_SELECT = `SELECT a.*, (SELECT COUNT(*) FROM submission_submissionaward sa WHERE sa.award_id = a.id) AS item_count
-  FROM submission_award a`
+const AWARD_SELECT = `SELECT a.*, (SELECT COUNT(*) FROM award_items sa WHERE sa.award_id = a.id) AS item_count
+  FROM awards a`
 
 const awardIn = z.object({
   name: z.string(),
@@ -82,7 +83,7 @@ async function parseAward(c: Ctx) {
 }
 
 function assertNameFree(name: string, exceptId = 0) {
-  if (get(`SELECT 1 FROM submission_award WHERE name = $name AND id != $id`, { name, id: exceptId })) {
+  if (get(`SELECT 1 FROM awards WHERE name = $name AND id != $id`, { name, id: exceptId })) {
     throw new HttpError(400, "奖项名称已存在")
   }
 }
@@ -91,7 +92,7 @@ function assertNameFree(name: string, exceptId = 0) {
 
 router.get("/", (c) => {
   requireUser(c)
-  const awards = all(`SELECT * FROM submission_award WHERE is_active = 1 ORDER BY sort_order`)
+  const awards = all(`SELECT * FROM awards WHERE is_active = 1 ORDER BY sort_order`)
   const result = []
   for (const award of awards) {
     const items = all(
@@ -105,7 +106,7 @@ router.get("/", (c) => {
       description: award.description,
       item_ordering: award.item_ordering,
       items: items.map((r) => ({
-        submission_id: uuidOut(r.submission_id),
+        submission_id: r.submission_id,
         username: r.username,
         task_title: r.task_title,
         task_display: r.task_display,
@@ -135,8 +136,8 @@ router.post("/manage/awards", async (c) => {
   assertNameFree(p.name)
   const ts = now()
   const res = run(
-    `INSERT INTO submission_award (created, modified, name, description, sort_order, is_active, item_ordering)
-     VALUES ($ts, $ts, $name, $description, $sort_order, $is_active, $item_ordering)`,
+    `INSERT INTO awards (name, description, sort_order, is_active, item_ordering, created, modified)
+     VALUES ($name, $description, $sort_order, $is_active, $item_ordering, $ts, $ts)`,
     { ts, ...p },
   )
   return c.json(awardManageOut(get(`${AWARD_SELECT} WHERE a.id = $id`, { id: Number(res.lastInsertRowid) })))
@@ -146,10 +147,10 @@ router.put("/manage/awards/:award_id", async (c) => {
   requireAdmin(c)
   const id = intParam(c, "award_id")
   const p = await parseAward(c)
-  orNotFound(get(`SELECT 1 FROM submission_award WHERE id = $id`, { id }))
+  orNotFound(get(`SELECT 1 FROM awards WHERE id = $id`, { id }))
   assertNameFree(p.name, id)
   run(
-    `UPDATE submission_award SET name = $name, description = $description, sort_order = $sort_order,
+    `UPDATE awards SET name = $name, description = $description, sort_order = $sort_order,
        is_active = $is_active, item_ordering = $item_ordering, modified = $ts
      WHERE id = $id`,
     { id, ts: now(), ...p },
@@ -160,18 +161,16 @@ router.put("/manage/awards/:award_id", async (c) => {
 router.delete("/manage/awards/:award_id", (c) => {
   requireAdmin(c)
   const id = intParam(c, "award_id")
-  orNotFound(get(`SELECT 1 FROM submission_award WHERE id = $id`, { id }))
-  tx(() => {
-    run(`DELETE FROM submission_submissionaward WHERE award_id = $id`, { id })
-    run(`DELETE FROM submission_award WHERE id = $id`, { id })
-  })
+  orNotFound(get(`SELECT 1 FROM awards WHERE id = $id`, { id }))
+  // 获奖作品条目跟着级联删除
+  run(`DELETE FROM awards WHERE id = $id`, { id })
   return c.json({ message: "删除成功" })
 })
 
 router.get("/manage/awards/:award_id/items", (c) => {
   requireAdmin(c)
   const award = orNotFound(
-    get<{ id: number; item_ordering: string }>(`SELECT id, item_ordering FROM submission_award WHERE id = $id`, {
+    get<{ id: number; item_ordering: string }>(`SELECT id, item_ordering FROM awards WHERE id = $id`, {
       id: intParam(c, "award_id"),
     }),
   )
@@ -186,12 +185,12 @@ router.post("/manage/awards/:award_id/items", async (c) => {
   requireAdmin(c)
   const awardId = intParam(c, "award_id")
   const p = await body(c, z.object({ submission_id: z.string(), sort_order: z.number().int().default(0) }))
-  const submissionId = uuidHex(p.submission_id)
+  const submissionId = uuid(p.submission_id)
   if (!submissionId) throw new ValidationError([{ loc: ["body", "submission_id"], msg: "需要 UUID" }])
-  orNotFound(get(`SELECT 1 FROM submission_award WHERE id = $id`, { id: awardId }))
-  orNotFound(get(`SELECT 1 FROM submission_submission WHERE id = $id`, { id: submissionId }))
+  orNotFound(get(`SELECT 1 FROM awards WHERE id = $id`, { id: awardId }))
+  orNotFound(get(`SELECT 1 FROM submissions WHERE id = $id`, { id: submissionId }))
   if (
-    get(`SELECT 1 FROM submission_submissionaward WHERE award_id = $a AND submission_id = $s`, {
+    get(`SELECT 1 FROM award_items WHERE award_id = $a AND submission_id = $s`, {
       a: awardId,
       s: submissionId,
     })
@@ -200,8 +199,8 @@ router.post("/manage/awards/:award_id/items", async (c) => {
   }
   const ts = now()
   const res = run(
-    `INSERT INTO submission_submissionaward (created, modified, sort_order, awarded_at, award_id, submission_id, is_stale)
-     VALUES ($ts, $ts, $sort_order, $ts, $award_id, $submission_id, 0)`,
+    `INSERT INTO award_items (award_id, submission_id, sort_order, awarded_at, created, modified)
+     VALUES ($award_id, $submission_id, $sort_order, $ts, $ts, $ts)`,
     { ts, sort_order: p.sort_order, award_id: awardId, submission_id: submissionId },
   )
   return c.json(itemManageOut(loadItem(Number(res.lastInsertRowid))))
@@ -211,8 +210,8 @@ router.put("/manage/items/:item_id", async (c) => {
   requireAdmin(c)
   const id = intParam(c, "item_id")
   const { sort_order } = await body(c, z.object({ sort_order: z.number().int().default(0) }))
-  orNotFound(get(`SELECT 1 FROM submission_submissionaward WHERE id = $id`, { id }))
-  run(`UPDATE submission_submissionaward SET sort_order = $sort_order, modified = $ts WHERE id = $id`, {
+  orNotFound(get(`SELECT 1 FROM award_items WHERE id = $id`, { id }))
+  run(`UPDATE award_items SET sort_order = $sort_order, modified = $ts WHERE id = $id`, {
     sort_order,
     ts: now(),
     id,
@@ -223,8 +222,8 @@ router.put("/manage/items/:item_id", async (c) => {
 router.delete("/manage/items/:item_id", (c) => {
   requireAdmin(c)
   const id = intParam(c, "item_id")
-  orNotFound(get(`SELECT 1 FROM submission_submissionaward WHERE id = $id`, { id }))
-  run(`DELETE FROM submission_submissionaward WHERE id = $id`, { id })
+  orNotFound(get(`SELECT 1 FROM award_items WHERE id = $id`, { id }))
+  run(`DELETE FROM award_items WHERE id = $id`, { id })
   return c.json({ message: "删除成功" })
 })
 
@@ -235,20 +234,20 @@ router.put("/manage/items/:item_id/refresh", (c) => {
   const item = orNotFound(
     get<{ user_id: number; task_id: number; submission_id: string; award_id: number }>(
       `SELECT s.user_id, s.task_id, sa.submission_id, sa.award_id
-       FROM submission_submissionaward sa JOIN submission_submission s ON s.id = sa.submission_id
+       FROM award_items sa JOIN submissions s ON s.id = sa.submission_id
        WHERE sa.id = $id`,
       { id },
     ),
   )
   const latest = get<{ id: string }>(
-    `SELECT id FROM submission_submission WHERE user_id = $user_id AND task_id = $task_id
+    `SELECT id FROM submissions WHERE user_id = $user_id AND task_id = $task_id
      ORDER BY created DESC LIMIT 1`,
     { user_id: item.user_id, task_id: item.task_id },
   )
   const target = latest?.id ?? item.submission_id
   if (
     target !== item.submission_id &&
-    get(`SELECT 1 FROM submission_submissionaward WHERE award_id = $a AND submission_id = $s`, {
+    get(`SELECT 1 FROM award_items WHERE award_id = $a AND submission_id = $s`, {
       a: item.award_id,
       s: target,
     })
@@ -256,7 +255,7 @@ router.put("/manage/items/:item_id/refresh", (c) => {
     throw new HttpError(400, "最新提交已在该奖项中")
   }
   run(
-    `UPDATE submission_submissionaward SET submission_id = $sid, is_stale = 0, modified = $ts WHERE id = $id`,
+    `UPDATE award_items SET submission_id = $sid, is_stale = 0, modified = $ts WHERE id = $id`,
     { sid: target, ts: now(), id },
   )
   return c.json(itemManageOut(loadItem(id)))
@@ -267,7 +266,7 @@ router.put("/manage/items/:item_id/refresh", (c) => {
 function assertAwarded(submissionId: string) {
   if (
     !get(
-      `SELECT 1 FROM submission_submissionaward sa JOIN submission_award a ON a.id = sa.award_id
+      `SELECT 1 FROM award_items sa JOIN awards a ON a.id = sa.award_id
        WHERE sa.submission_id = $id AND a.is_active = 1`,
       { id: submissionId },
     )
@@ -283,21 +282,22 @@ router.get("/:submission_id", (c) => {
   const s = orNotFound(
     get(
       `SELECT s.id, u.username, t.title AS task_title, t.display AS task_display, t.task_type,
-         s.score, s.view_count, s.html, s.css, s.js, ${HAS_CHAIN}
-       FROM submission_submission s
-       JOIN account_user u ON u.id = s.user_id
-       JOIN task_task t ON t.id = s.task_id
+         s.score, s.view_count, code.html, code.css, code.js, ${HAS_CHAIN}
+       FROM submissions s
+       LEFT JOIN submission_code code ON code.submission_id = s.id
+       JOIN users u ON u.id = s.user_id
+       JOIN tasks t ON t.id = s.task_id
        WHERE s.id = $id`,
       { id },
     ),
   )
   const awards = all<{ name: string }>(
-    `SELECT a.name FROM submission_submissionaward sa JOIN submission_award a ON a.id = sa.award_id
+    `SELECT a.name FROM award_items sa JOIN awards a ON a.id = sa.award_id
      WHERE sa.submission_id = $id AND a.is_active = 1 ORDER BY sa.sort_order, sa.id`,
     { id },
   )
   return c.json({
-    submission_id: uuidOut(s.id),
+    submission_id: s.id,
     username: s.username,
     task_title: s.task_title,
     task_display: s.task_display,
@@ -316,8 +316,8 @@ router.get("/:submission_id/prompt-chain", (c) => {
   requireUser(c)
   const id = uuidParam(c, "submission_id")
   assertAwarded(id)
-  orNotFound(get(`SELECT 1 FROM submission_submission WHERE id = $id`, { id }))
-  const msg = get<MessageRow>(`SELECT * FROM prompt_message WHERE submission_id = $id`, { id })
+  orNotFound(get(`SELECT 1 FROM submissions WHERE id = $id`, { id }))
+  const msg = get<MessageRow>(`SELECT * FROM messages WHERE submission_id = $id`, { id })
   if (!msg) throw new HttpError(404, "该作品没有关联提示词链")
   return c.json(buildPromptRounds(msg))
 })

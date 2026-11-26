@@ -164,7 +164,7 @@ export const Tutorial = {
   },
 
   async createOrUpdate(payload: TutorialIn) {
-    const res = await http.post("/tutorial/", payload)
+    const res = await http.post("/tutorial", payload)
     return res.data
   },
 
@@ -195,7 +195,7 @@ export const Challenge = {
   },
 
   async createOrUpdate(payload: ChallengeIn) {
-    const res = await http.post("/challenge/", payload)
+    const res = await http.post("/challenge", payload)
     return res.data
   },
 
@@ -226,7 +226,7 @@ export const Creation = {
   },
 
   async create(payload: CreationIn): Promise<CreationDetail> {
-    const res = await http.post("/creation/", payload)
+    const res = await http.post("/creation", payload)
     return res.data
   },
 
@@ -274,7 +274,7 @@ export const Submission = {
       message_id: messageId ?? null,
       reflection: reflection || null,
     }
-    const res = await http.post("/submission/", data)
+    const res = await http.post("/submission", data)
     return res.data
   },
 
@@ -335,7 +335,7 @@ export const Submission = {
   },
 
   async randomForRating(excludeId?: string) {
-    const res = await http.get("/submission/random-for-rating/", {
+    const res = await http.get("/submission/random-for-rating", {
       params: excludeId ? { exclude_id: excludeId } : {},
     })
     return res.data as RandomRatingItem | null
@@ -374,14 +374,14 @@ function filenameFromDisposition(
 
 export const Gradebook = {
   async get(query: GradebookQuery): Promise<GradebookOut> {
-    const res = await http.get("/submission/gradebook/", {
+    const res = await http.get("/submission/gradebook", {
       params: gradebookParams(query),
     })
     return res.data
   },
 
   async downloadCsv(query: GradebookQuery) {
-    const res = await http.get("/submission/gradebook/export/", {
+    const res = await http.get("/submission/gradebook/export", {
       params: gradebookParams(query),
       responseType: "blob",
     })
@@ -417,7 +417,7 @@ export const Prompt = {
     const params: Record<string, number> = {}
     if (taskId) params.task_id = taskId
     if (userId) params.user_id = userId
-    return (await http.get("/prompt/conversations/", { params })).data
+    return (await http.get("/prompt/conversations", { params })).data
   },
 
   async listHistory(taskId: number): Promise<PromptHistoryItem[]> {
@@ -428,7 +428,7 @@ export const Prompt = {
   async getMessages(conversationId: string): Promise<PromptMessage[]> {
     return (
       await http.get<PromptMessage[]>(
-        `/prompt/conversations/${conversationId}/messages/`,
+        `/prompt/conversations/${conversationId}/messages`,
       )
     ).data
   },
@@ -454,7 +454,7 @@ export const Helper = {
   async upload(file: File) {
     const form = new window.FormData()
     form.append("image", file)
-    const res = await http.post("/upload/", form, {
+    const res = await http.post("/upload", form, {
       headers: { "content-type": "multipart/form-data" },
     })
     return !!res.data.url ? res.data.url : ""
@@ -485,7 +485,7 @@ export const Review = {
 
 export const Showcase = {
   async list(): Promise<AwardSection[]> {
-    const res = await http.get("/submission/showcase/")
+    const res = await http.get("/submission/showcase")
     return res.data
   },
 
@@ -555,13 +555,13 @@ export const Showcase = {
   },
 
   async getDetail(submissionId: string): Promise<ShowcaseDetail> {
-    const res = await http.get(`/submission/showcase/${submissionId}/`)
+    const res = await http.get(`/submission/showcase/${submissionId}`)
     return res.data
   },
 
   async getPromptChain(submissionId: string): Promise<PromptRound[]> {
     const res = await http.get(
-      `/submission/showcase/${submissionId}/prompt-chain/`,
+      `/submission/showcase/${submissionId}/prompt-chain`,
     )
     return res.data
   },

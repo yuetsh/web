@@ -10,7 +10,7 @@ import submission from "./routes/submission"
 import prompt from "./routes/prompt"
 import { mediaPath } from "./routes/files"
 
-// strict: false —— 带不带结尾的斜杠都能匹配（前端两种写法都有）
+// strict: false —— 结尾带斜杠也能匹配。前端已统一不带斜杠，留着是为了部署时还开着旧页面的浏览器
 export const app = new Hono<Env>({ strict: false })
 
 // 登录凭证放在 Authorization 头里，浏览器不会自动带上，所以不需要 cookie 和 CSRF 防护

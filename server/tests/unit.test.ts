@@ -11,7 +11,7 @@ import {
 } from "../src/services/llm"
 import { config } from "../src/config"
 import { checkPassword, makePassword } from "../src/auth"
-import { formatMicros, iso, uuidHex, uuidOut } from "../src/db"
+import { now, uuid } from "../src/db"
 import { toCsv } from "../src/services/gradebook"
 
 describe("pyRound", () => {
@@ -65,12 +65,14 @@ test("兼容 Django 的 pbkdf2 密码哈希", async () => {
 })
 
 test("时间与 UUID 格式", () => {
-  expect(formatMicros(Date.UTC(2026, 0, 2, 3, 4, 5) * 1000 + 678901)).toBe("2026-01-02 03:04:05.678901")
-  expect(iso("2026-01-02 03:04:05.678901")).toBe("2026-01-02T03:04:05.678Z")
-  const hex = "0123456789abcdef0123456789abcdef"
-  expect(uuidOut(hex)).toBe("01234567-89ab-cdef-0123-456789abcdef")
-  expect(uuidHex("01234567-89AB-cdef-0123-456789abcdef")).toBe(hex)
-  expect(uuidHex("nope")).toBeNull()
+  const times = Array.from({ length: 5 }, now)
+  expect(times[0]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+  // 同一毫秒内连续调用也严格递增
+  expect([...times].sort()).toEqual(times)
+  expect(new Set(times).size).toBe(times.length)
+  expect(uuid("01234567-89AB-cdef-0123-456789abcdef")).toBe("01234567-89ab-cdef-0123-456789abcdef")
+  expect(uuid("0123456789abcdef0123456789abcdef")).toBe("01234567-89ab-cdef-0123-456789abcdef")
+  expect(uuid("nope")).toBeNull()
 })
 
 test("CSV 转义", () => {

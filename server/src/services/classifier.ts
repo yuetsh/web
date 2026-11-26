@@ -59,11 +59,11 @@ function clip(text: string) {
 // 发给模型的：题目要求、同一对话里上一轮的提问（引导对话只和引导对话比）、这一轮的提问
 function classifyInput(msg: { id: number; content: string; source: string; conversation_id: string; created: string }) {
   const task = get<{ title: string; content: string }>(
-    `SELECT t.title, t.content FROM prompt_conversation c JOIN task_task t ON t.id = c.task_id WHERE c.id = $conv`,
+    `SELECT t.title, t.content FROM conversations c JOIN tasks t ON t.id = c.task_id WHERE c.id = $conv`,
     { conv: msg.conversation_id },
   )
   const prev = get<{ content: string }>(
-    `SELECT content FROM prompt_message
+    `SELECT content FROM messages
      WHERE conversation_id = $conv AND role = 'user' AND source != 'edit'
        AND (source = 'guidance') = $guidance
        AND (created < $created OR (created = $created AND id < $id))
@@ -80,19 +80,19 @@ function classifyInput(msg: { id: number; content: string; source: string; conve
 
 export async function classifyMessage(messageId: number): Promise<number | null> {
   const msg = get<{ id: number; content: string; source: string; conversation_id: string; created: string }>(
-    `SELECT id, content, source, conversation_id, created FROM prompt_message
+    `SELECT id, content, source, conversation_id, created FROM messages
      WHERE id = $id AND role = 'user' AND source != 'edit'`,
     { id: messageId },
   )
   if (!msg) return null
   // “1”“，”“可以”这类太短，判断不出层级；清掉以前打的标签（--force 重标时）
   if ([...msg.content.trim()].length < MIN_PROMPT_CHARS) {
-    run(`UPDATE prompt_message SET prompt_level = NULL WHERE id = $id`, { id: messageId })
+    run(`UPDATE messages SET prompt_level = NULL WHERE id = $id`, { id: messageId })
     return null
   }
   const level = await callLlm(classifyInput(msg))
   if (level !== null) {
-    run(`UPDATE prompt_message SET prompt_level = $level WHERE id = $id`, {
+    run(`UPDATE messages SET prompt_level = $level WHERE id = $id`, {
       level,
       id: messageId,
     })
@@ -102,7 +102,7 @@ export async function classifyMessage(messageId: number): Promise<number | null>
 
 export async function classifyConversationMessages(conversationId: string, force = false) {
   const rows = all<{ id: number }>(
-    `SELECT id FROM prompt_message
+    `SELECT id FROM messages
      WHERE conversation_id = $id AND role = 'user' AND source != 'edit' ${force ? "" : "AND prompt_level IS NULL"}
      ORDER BY created, id`,
     { id: conversationId },

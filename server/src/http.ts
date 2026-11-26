@@ -1,7 +1,7 @@
 import type { Context } from "hono"
 import { z } from "zod"
 import type { User } from "./auth"
-import { uuidHex } from "./db"
+import { uuid } from "./db"
 
 export type Env = { Variables: { user: User | null } }
 export type Ctx = Context<Env>
@@ -68,14 +68,14 @@ export function intParam(c: Ctx, name: string): number {
   return Number(v)
 }
 
-// 路径参数里的 UUID，返回数据库中的 32 位十六进制形式
+// 路径参数里的 UUID（规范成小写、带连字符）
 export function uuidParam(c: Ctx, name: string): string {
-  const hex = uuidHex(c.req.param(name) ?? "")
-  if (!hex) throw new ValidationError([{ loc: ["path", name], msg: "需要 UUID" }])
-  return hex
+  const id = uuid(c.req.param(name) ?? "")
+  if (!id) throw new ValidationError([{ loc: ["path", name], msg: "需要 UUID" }])
+  return id
 }
 
-// 查询参数的通用类型（与 django-ninja / pydantic 的解析方式一致）
+// 查询参数的通用类型
 export const qs = {
   int: z.coerce.number().int(),
   num: z.coerce.number(),
@@ -93,7 +93,7 @@ export const pageQuery = z.object({
   page_size: qs.opt(qs.int.min(1)),
 })
 
-// 与 ninja PageNumberPagination 相同：默认 10 条，最多 100 条
+// 分页：默认 10 条，最多 100 条
 export function pageWindow(p: { page: number; page_size?: number }) {
   const size = Math.min(p.page_size ?? 10, 100)
   return { limit: size, offset: (p.page - 1) * size }

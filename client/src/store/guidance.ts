@@ -59,7 +59,7 @@ const socket = new ReconnectingSocket({
 })
 
 function connect(taskId: number) {
-  socket.connect(`/ws/guidance/${taskId}/`)
+  socket.connect(`/ws/guidance/${taskId}`)
 }
 
 function sendToSocket(content: string) {

@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { z } from "zod"
-import { all, get, tx, iso, uuidOut } from "../db"
+import { all, get, tx } from "../db"
 import { Role, isStaff, requireUser } from "../auth"
 import { HttpError, ValidationError, body, intParam, orNotFound, qs, query, uuidParam, type Env } from "../http"
 import { deleteRound, hasRatingsOrAwards } from "../services/cascade"
@@ -44,24 +44,24 @@ router.get("/conversations", (c) => {
   }
   const rows = all(
     `SELECT c.id, c.user_id, u.username, c.task_id, t.title AS task_title, c.is_active, c.created,
-       (SELECT COUNT(*) FROM prompt_message m WHERE m.conversation_id = c.id) AS message_count
-     FROM prompt_conversation c
-     JOIN account_user u ON u.id = c.user_id
-     JOIN task_task t ON t.id = c.task_id
+       (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count
+     FROM conversations c
+     JOIN users u ON u.id = c.user_id
+     JOIN tasks t ON t.id = c.task_id
      ${where.length ? "WHERE " + where.join(" AND ") : ""}
      ORDER BY message_count DESC, c.created DESC`,
     params,
   )
   return c.json(
     rows.map((r) => ({
-      id: uuidOut(r.id),
+      id: r.id,
       user_id: r.user_id,
       username: r.username,
       task_id: r.task_id,
       task_title: r.task_title,
       is_active: !!r.is_active,
       message_count: r.message_count,
-      created: iso(r.created),
+      created: r.created,
     })),
   )
 })
@@ -70,11 +70,11 @@ router.get("/conversations/:conversation_id/messages", (c) => {
   const user = requireUser(c)
   const id = uuidParam(c, "conversation_id")
   const conv = orNotFound(
-    get<{ user_id: number }>(`SELECT user_id FROM prompt_conversation WHERE id = $id`, { id }),
+    get<{ user_id: number }>(`SELECT user_id FROM conversations WHERE id = $id`, { id }),
   )
   if (user.role === Role.NORMAL && conv.user_id !== user.id) return c.json([])
   const messages = all<MessageRow>(
-    `SELECT * FROM prompt_message WHERE conversation_id = $id ORDER BY created, id`,
+    `SELECT * FROM messages WHERE conversation_id = $id ORDER BY created, id`,
     { id },
   )
   return c.json(
@@ -87,7 +87,7 @@ router.get("/conversations/:conversation_id/messages", (c) => {
       code_css: m.code_css,
       code_js: m.code_js,
       prompt_level: m.prompt_level,
-      created: iso(m.created),
+      created: m.created,
     })),
   )
 })
@@ -97,7 +97,7 @@ router.get("/history/:task_id", (c) => {
   const user = requireUser(c)
   const taskId = intParam(c, "task_id")
   const messages = all<MessageRow>(
-    `SELECT m.* FROM prompt_message m JOIN prompt_conversation c ON c.id = m.conversation_id
+    `SELECT m.* FROM messages m JOIN conversations c ON c.id = m.conversation_id
      WHERE c.user_id = $user_id AND c.task_id = $task_id
      ORDER BY m.conversation_id, m.created, m.id`,
     { user_id: user.id, task_id: taskId },
@@ -122,14 +122,14 @@ router.get("/history/:task_id", (c) => {
         item: {
           user_message_id: userMsg.id,
           assistant_message_id: asst.id,
-          submission_id: uuidOut(asst.submission_id),
+          submission_id: asst.submission_id,
           source: userMsg.source,
           prompt: userMsg.content,
           prompt_level: userMsg.prompt_level,
           code_html: asst.code_html,
           code_css: asst.code_css,
           code_js: asst.code_js,
-          created: iso(userMsg.created),
+          created: userMsg.created,
         },
       })
     })
@@ -155,7 +155,7 @@ router.post("/versions", async (c) => {
       prompt: z.string().trim().max(5000).optional(),
     }),
   )
-  orNotFound(get(`SELECT 1 FROM task_task WHERE id = $id`, { id: p.task_id }), "任务不存在")
+  orNotFound(get(`SELECT 1 FROM tasks WHERE id = $id`, { id: p.task_id }), "任务不存在")
   if (!canAccessTask(user, p.task_id)) throw new HttpError(403, "没有权限")
   const source = p.prompt ? "manual" : "edit"
   const code = { code_html: p.html, code_css: p.css, code_js: p.js }
@@ -185,7 +185,7 @@ router.post("/conversations/:conversation_id/classify", (c) => {
   if (!isStaff(user)) throw new HttpError(403, "没有权限")
   const id = uuidParam(c, "conversation_id")
   const { force } = query(c, z.object({ force: qs.opt(qs.bool).default(false) }))
-  orNotFound(get(`SELECT 1 FROM prompt_conversation WHERE id = $id`, { id }))
+  orNotFound(get(`SELECT 1 FROM conversations WHERE id = $id`, { id }))
   inBackground(classifyConversationMessages(id, force))
   return c.json({ message: "开始分类" })
 })
@@ -206,7 +206,7 @@ router.post("/classify-batch", (c) => {
   }
   if (!q.force) where.push("m.prompt_level IS NULL")
   const ids = all<{ id: number }>(
-    `SELECT m.id FROM prompt_message m JOIN prompt_conversation c ON c.id = m.conversation_id
+    `SELECT m.id FROM messages m JOIN conversations c ON c.id = m.conversation_id
      WHERE ${where.join(" AND ")} ORDER BY m.created, m.id`,
     params,
   ).map((r) => r.id)
@@ -219,8 +219,8 @@ router.delete("/messages/:message_id/pair", (c) => {
   const user = requireUser(c)
   const asst = orNotFound(
     get<MessageRow & { owner_id: number }>(
-      `SELECT m.*, c.user_id AS owner_id FROM prompt_message m
-       JOIN prompt_conversation c ON c.id = m.conversation_id
+      `SELECT m.*, c.user_id AS owner_id FROM messages m
+       JOIN conversations c ON c.id = m.conversation_id
        WHERE m.id = $id AND m.role = 'assistant'`,
       { id: intParam(c, "message_id") },
     ),
@@ -231,7 +231,7 @@ router.delete("/messages/:message_id/pair", (c) => {
   if (asst.submission_id && user.role !== Role.SUPER && hasRatingsOrAwards(asst.submission_id)) {
     throw new HttpError(400, "该消息关联的提交已被评分或获奖，无法删除")
   }
-  tx(() => deleteRound(asst))
+  deleteRound(asst)
   return c.json({ deleted: true, submission_deleted: !!asst.submission_id })
 })
 

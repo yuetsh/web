@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { randomInt } from "node:crypto"
 import { z } from "zod"
-import { all, get, run, tx, now, iso, likeEscape } from "../db"
+import { all, get, run, tx, now, likeEscape } from "../db"
 import {
   Role,
   authenticate,
@@ -29,19 +29,16 @@ async function insertUser(u: {
   password: string
   role?: string
   classname?: string
-  email?: string
 }) {
   // 先算哈希（异步），再同步地查重 + 插入：中间没有 await，并发注册同名不会撞唯一约束变成 500
   const password = await makePassword(u.password)
   if (userExists(u.username)) throw new HttpError(400, "用户已存在")
   const res = run(
-    `INSERT INTO account_user
-       (password, last_login, is_superuser, username, email, is_staff, is_active, date_joined, role, raw_password, classname)
-     VALUES ($password, NULL, 0, $username, $email, 0, 1, $now, $role, $raw, $classname)`,
+    `INSERT INTO users (username, password, raw_password, role, classname, created)
+     VALUES ($username, $password, $raw, $role, $classname, $now)`,
     {
       password,
       username: u.username,
-      email: u.email ?? "",
       now: now(),
       role: u.role ?? Role.NORMAL,
       raw: u.password.slice(0, 20),
@@ -52,7 +49,7 @@ async function insertUser(u: {
 }
 
 const userExists = (username: string) =>
-  !!get(`SELECT 1 FROM account_user WHERE username = $username`, { username })
+  !!get(`SELECT 1 FROM users WHERE username = $username`, { username })
 
 // 登录失败次数限制（进程内存里计数）：同一用户名 10 分钟内失败 10 次、同一 IP 失败 100 次后暂停登录。
 // 机房的电脑共用一个出口 IP，IP 的阈值要放宽，主要防的是对单个账号猜密码
@@ -132,12 +129,12 @@ router.get("/list", (c) => {
   const whereSql = where.join(" AND ")
   const { limit, offset } = pageWindow(q)
   const rows = all(
-    `SELECT id, username, raw_password, role, classname, date_joined, last_login, is_active
-     FROM account_user WHERE ${whereSql} ORDER BY id DESC LIMIT $limit OFFSET $offset`,
+    `SELECT id, username, raw_password, role, classname, created, last_login, is_active
+     FROM users WHERE ${whereSql} ORDER BY id DESC LIMIT $limit OFFSET $offset`,
     { ...params, limit, offset },
   )
   const count = get<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM account_user WHERE ${whereSql}`,
+    `SELECT COUNT(*) AS n FROM users WHERE ${whereSql}`,
     params,
   )!.n
   return c.json({
@@ -147,8 +144,8 @@ router.get("/list", (c) => {
       raw_password: u.role !== Role.SUPER ? u.raw_password : "",
       role: u.role,
       classname: u.classname,
-      date_joined: iso(u.date_joined),
-      last_login: iso(u.last_login),
+      date_joined: u.created,
+      last_login: u.last_login,
       is_active: bool(u.is_active),
     })),
     count,
@@ -182,9 +179,8 @@ router.post("/batch", async (c) => {
     if (usernames.some(userExists)) throw new HttpError(400, "有些用户已经存在，创建失败")
     for (const u of users) {
       run(
-        `INSERT INTO account_user
-           (password, last_login, is_superuser, username, email, is_staff, is_active, date_joined, role, raw_password, classname)
-         VALUES ($password, NULL, 0, $username, '', 0, 1, $now, 'normal', $raw, $classname)`,
+        `INSERT INTO users (username, password, raw_password, role, classname, created)
+         VALUES ($username, $password, $raw, 'normal', $classname, $now)`,
         { password: u.password, username: u.username, now: ts, raw: u.raw, classname: payload.classname },
       )
     }
@@ -192,7 +188,7 @@ router.post("/batch", async (c) => {
   return c.json({ message: "批量创建成功" })
 })
 
-// 新建单个用户（替代原来 Django Admin 的新增页面）
+// 新建单个用户
 router.post("/create", async (c) => {
   requireSuper(c)
   const payload = await body(
@@ -208,7 +204,7 @@ router.post("/create", async (c) => {
   return c.json({ id, message: "创建成功" })
 })
 
-// 修改用户（替代原来 Django Admin 的修改页面）
+// 修改用户
 router.put("/:id{[0-9]+}", async (c) => {
   requireSuper(c)
   const id = intParam(c, "id")
@@ -223,7 +219,7 @@ router.put("/:id{[0-9]+}", async (c) => {
   )
   const user = orNotFound(
     get<{ id: number; username: string; role: string }>(
-      `SELECT id, username, role FROM account_user WHERE id = $id`,
+      `SELECT id, username, role FROM users WHERE id = $id`,
       { id },
     ),
     "查无此人",
@@ -236,7 +232,7 @@ router.put("/:id{[0-9]+}", async (c) => {
     throw new HttpError(400, "用户名已存在")
   }
   run(
-    `UPDATE account_user SET
+    `UPDATE users SET
        username = COALESCE($username, username),
        role = COALESCE($role, role),
        classname = COALESCE($classname, classname)
@@ -256,7 +252,7 @@ router.get("/:id{[0-9]+}", (c) => {
   requireSuper(c)
   const u = orNotFound(
     get<{ is_active: number }>(
-      `SELECT id, username, role, classname, is_active FROM account_user WHERE id = $id`,
+      `SELECT id, username, role, classname, is_active FROM users WHERE id = $id`,
       { id: intParam(c, "id") },
     ),
     "查无此人",
@@ -269,20 +265,20 @@ router.put("/active/:id", (c) => {
   const id = intParam(c, "id")
   const user = orNotFound(
     get<{ username: string; is_active: number }>(
-      `SELECT username, is_active FROM account_user WHERE id = $id`,
+      `SELECT username, is_active FROM users WHERE id = $id`,
       { id },
     ),
     "查无此人",
   )
   const active = !user.is_active
-  run(`UPDATE account_user SET is_active = $active WHERE id = $id`, { active, id })
-  if (!active) run(`DELETE FROM auth_refresh_token WHERE user_id = $id`, { id })
+  run(`UPDATE users SET is_active = $active WHERE id = $id`, { active, id })
+  if (!active) run(`DELETE FROM refresh_tokens WHERE user_id = $id`, { id })
   return c.json({ message: `${user.username} ${active ? "解封" : "封号"}成功` })
 })
 
 router.get("/classes", (c) => {
   const rows = all<{ classname: string }>(
-    `SELECT DISTINCT classname FROM account_user WHERE classname > '' ORDER BY classname`,
+    `SELECT DISTINCT classname FROM users WHERE classname > '' ORDER BY classname`,
   )
   return c.json(rows.map((r) => r.classname))
 })
@@ -291,7 +287,7 @@ router.get("/names", (c) => {
   const { classname } = query(c, z.object({ classname: z.string() }))
   const prefix = "web" + classname
   const rows = all<{ username: string }>(
-    `SELECT username FROM account_user
+    `SELECT username FROM users
      WHERE classname = $classname AND substr(username, 1, $len) = $prefix
      ORDER BY username`,
     { classname, prefix, len: prefix.length },

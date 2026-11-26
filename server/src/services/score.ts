@@ -20,8 +20,8 @@ function zoneFor(n: number, score: number): string | null {
  */
 export function updateSubmissionScore(submissionId: string) {
   const ratings = all<{ score: number; role: string }>(
-    `SELECT r.score, u.role FROM submission_rating r
-     JOIN account_user u ON u.id = r.user_id
+    `SELECT r.score, u.role FROM ratings r
+     JOIN users u ON u.id = r.user_id
      WHERE r.submission_id = $id ORDER BY r.id`,
     { id: submissionId },
   )
@@ -35,7 +35,7 @@ export function updateSubmissionScore(submissionId: string) {
 
     const C = 3
     const mean = get<{ avg: number | null }>(
-      `SELECT AVG(raw_score) AS avg FROM submission_submission
+      `SELECT AVG(raw_score) AS avg FROM submissions
        WHERE raw_score > 0 AND id != $id`,
       { id: submissionId },
     )?.avg
@@ -44,7 +44,7 @@ export function updateSubmissionScore(submissionId: string) {
   }
 
   run(
-    `UPDATE submission_submission
+    `UPDATE submissions
      SET raw_score = $raw, score = $score, zone = $zone WHERE id = $id`,
     { raw: rawScore, score, zone: zoneFor(n, score), id: submissionId },
   )

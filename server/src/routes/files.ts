@@ -6,7 +6,7 @@ import { all, get, run } from "../db"
 import { canSeeUnpublished, requireAdmin, requireSuper, type User } from "../auth"
 import { HttpError, ValidationError, intParam, notFound, orNotFound, type Ctx, type Env } from "../http"
 
-// 与 Django 的 get_valid_filename 一致：空格换成下划线，去掉除字母数字、-、_、. 以外的字符
+// 合法的文件名：空格换成下划线，去掉除字母数字、-、_、. 以外的字符
 export function validFilename(name: string) {
   const s = name.trim().replaceAll(" ", "_").replace(/[^-\p{L}\p{N}_.]/gu, "")
   if (!s || s === "." || s === "..") throw new HttpError(400, `无效的文件名：${name}`)
@@ -39,9 +39,8 @@ type Kind = "challenge" | "tutorial"
 function findTask(kind: Kind, display: number) {
   return orNotFound(
     get<{ id: number; task_type: string; display: number; is_public: number }>(
-      `SELECT t.id, t.task_type, t.display, t.is_public FROM task_task t
-       JOIN task_${kind} x ON x.task_ptr_id = t.id WHERE t.display = $display`,
-      { display },
+      `SELECT id, task_type, display, is_public FROM tasks WHERE task_type = $kind AND display = $display`,
+      { kind, display },
     ),
   )
 }
@@ -59,7 +58,7 @@ for (const kind of ["challenge", "tutorial"] as const) {
     const task = findTask(kind, intParam(c, "display"))
     if (!task.is_public && !canSeeUnpublished(c.get("user"), kind)) notFound()
     const rows = all<{ name: string; file: string }>(
-      `SELECT name, file FROM task_taskasset WHERE task_id = $id ORDER BY id`,
+      `SELECT name, file FROM task_assets WHERE task_id = $id ORDER BY id`,
       { id: task.id },
     )
     return c.json(rows.map(assetOut))
@@ -80,7 +79,7 @@ for (const kind of ["challenge", "tutorial"] as const) {
       ])
     }
     const existing = get<{ file: string }>(
-      `SELECT file FROM task_taskasset WHERE task_id = $task_id AND name = $name`,
+      `SELECT file FROM task_assets WHERE task_id = $task_id AND name = $name`,
       { task_id: task.id, name },
     )
     // 先写临时文件再 rename 覆盖：写失败时旧文件还在，并发上传同名文件也不会留下坏文件
@@ -96,7 +95,7 @@ for (const kind of ["challenge", "tutorial"] as const) {
     }
     // 上面 await 期间可能有同名上传先写入了，用 upsert 而不是按 existing 选 INSERT / UPDATE
     run(
-      `INSERT INTO task_taskasset (name, file, task_id) VALUES ($name, $file, $task_id)
+      `INSERT INTO task_assets (name, file, task_id) VALUES ($name, $file, $task_id)
        ON CONFLICT (task_id, name) DO UPDATE SET file = excluded.file`,
       { name, file: stored, task_id: task.id },
     )
@@ -110,12 +109,12 @@ for (const kind of ["challenge", "tutorial"] as const) {
     const task = findTask(kind, intParam(c, "display"))
     const asset = orNotFound(
       get<{ id: number; file: string }>(
-        `SELECT id, file FROM task_taskasset WHERE task_id = $task_id AND name = $name`,
+        `SELECT id, file FROM task_assets WHERE task_id = $task_id AND name = $name`,
         { task_id: task.id, name: c.req.param("name") },
       ),
     )
     if (asset.file) await rm(mediaPath(asset.file), { force: true })
-    run(`DELETE FROM task_taskasset WHERE id = $id`, { id: asset.id })
+    run(`DELETE FROM task_assets WHERE id = $id`, { id: asset.id })
     return c.json({ message: "删除成功" })
   })
 }

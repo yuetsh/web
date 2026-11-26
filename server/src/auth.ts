@@ -3,7 +3,7 @@ import { promisify } from "node:util"
 import { sign, verify } from "hono/jwt"
 import type { MiddlewareHandler } from "hono"
 import { config } from "./config"
-import { get, run, now, toDbTime } from "./db"
+import { get, run, now } from "./db"
 import { HttpError, type Ctx, type Env } from "./http"
 
 const pbkdf2 = promisify(pbkdf2Cb)
@@ -23,7 +23,7 @@ export interface User {
   is_active: number
 }
 
-// ── 密码：兼容 Django 的 pbkdf2_sha256 格式，老用户无需重置密码 ──
+// ── 密码：pbkdf2_sha256$迭代次数$盐$哈希（和 Django 的格式相同，老用户的密码照常能用） ──
 
 const ITERATIONS = 600_000
 
@@ -51,11 +51,11 @@ export async function checkPassword(raw: string, encoded: string) {
 
 export async function setPassword(userId: number, raw: string) {
   run(
-    `UPDATE account_user SET password = $password, raw_password = $raw WHERE id = $id`,
+    `UPDATE users SET password = $password, raw_password = $raw WHERE id = $id`,
     { password: await makePassword(raw), raw: raw.slice(0, 20), id: userId },
   )
-  // 改密码后让该用户的 refresh token 全部失效（与 Django 行为一致）
-  run(`DELETE FROM auth_refresh_token WHERE user_id = $id`, { id: userId })
+  // 改密码后让该用户的 refresh token 全部失效，其他设备要重新登录
+  run(`DELETE FROM refresh_tokens WHERE user_id = $id`, { id: userId })
 }
 
 // ── 会话 ──
@@ -63,7 +63,7 @@ export async function setPassword(userId: number, raw: string) {
 export async function authenticate(username: string, password: string) {
   const row = get<User & { password: string }>(
     `SELECT id, username, role, classname, is_active, password
-     FROM account_user WHERE username = $username`,
+     FROM users WHERE username = $username`,
     { username },
   )
   if (!row || !row.is_active) {
@@ -77,7 +77,7 @@ export async function authenticate(username: string, password: string) {
 }
 
 // access token 是短期 JWT（只带用户 id，每次请求仍查一次用户，封号立即生效）；
-// refresh token 是随机串，表 auth_refresh_token 里只存它的 sha256，用来换新的 access token
+// refresh token 是随机串，表 refresh_tokens 里只存它的 sha256，用来换新的 access token
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex")
 
 function signAccessToken(userId: number) {
@@ -88,12 +88,12 @@ function signAccessToken(userId: number) {
 export async function issueTokens(user: User) {
   const refreshToken = randomBytes(32).toString("base64url")
   const expire = new Date(Date.now() + config.refreshTokenSeconds * 1000)
-  run(`DELETE FROM auth_refresh_token WHERE expire_at < $now`, { now: now() })
+  run(`DELETE FROM refresh_tokens WHERE expire_at < $now`, { now: now() })
   run(
-    `INSERT INTO auth_refresh_token (token_hash, user_id, expire_at) VALUES ($hash, $user_id, $expire_at)`,
-    { hash: hashToken(refreshToken), user_id: user.id, expire_at: toDbTime(expire) },
+    `INSERT INTO refresh_tokens (token_hash, user_id, expire_at) VALUES ($hash, $user_id, $expire_at)`,
+    { hash: hashToken(refreshToken), user_id: user.id, expire_at: expire.toISOString() },
   )
-  run(`UPDATE account_user SET last_login = $now WHERE id = $id`, {
+  run(`UPDATE users SET last_login = $now WHERE id = $id`, {
     now: now(),
     id: user.id,
   })
@@ -102,7 +102,7 @@ export async function issueTokens(user: User) {
 
 export async function refreshAccessToken(refreshToken: string) {
   const row = get<{ id: number }>(
-    `SELECT u.id FROM auth_refresh_token t JOIN account_user u ON u.id = t.user_id
+    `SELECT u.id FROM refresh_tokens t JOIN users u ON u.id = t.user_id
      WHERE t.token_hash = $hash AND t.expire_at > $now AND u.is_active = 1`,
     { hash: hashToken(refreshToken), now: now() },
   )
@@ -111,7 +111,7 @@ export async function refreshAccessToken(refreshToken: string) {
 }
 
 export function revokeRefreshToken(refreshToken: string) {
-  run(`DELETE FROM auth_refresh_token WHERE token_hash = $hash`, { hash: hashToken(refreshToken) })
+  run(`DELETE FROM refresh_tokens WHERE token_hash = $hash`, { hash: hashToken(refreshToken) })
 }
 
 export async function userFromAccessToken(token: string | null | undefined): Promise<User | null> {
@@ -123,7 +123,7 @@ export async function userFromAccessToken(token: string | null | undefined): Pro
     return null
   }
   return get<User>(
-    `SELECT id, username, role, classname, is_active FROM account_user
+    `SELECT id, username, role, classname, is_active FROM users
      WHERE id = $id AND is_active = 1`,
     { id: Number(payload.sub) },
   )

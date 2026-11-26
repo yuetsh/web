@@ -1,5 +1,5 @@
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun"
-import { all, get, run, iso, uuidOut } from "./db"
+import { all, get, run } from "./db"
 import { userFromAccessToken, type User } from "./auth"
 import {
   canAccessTask,
@@ -52,7 +52,7 @@ export async function upgrade(
   const user = await userFromAccessToken(url.searchParams.get("token"))
   if (!user) return new Response("Unauthorized", { status: 401 })
   const taskId = Number(match[2])
-  if (!get(`SELECT 1 FROM task_task WHERE id = $id`, { id: taskId })) {
+  if (!get(`SELECT 1 FROM tasks WHERE id = $id`, { id: taskId })) {
     return new Response("Not Found", { status: 404 })
   }
   if (!canAccessTask(user, taskId)) return new Response("Forbidden", { status: 403 })
@@ -79,7 +79,7 @@ function send(ws: WS, data: unknown) {
 
 function dropPendingUserMessage(ws: WS) {
   if (ws.data.pendingUserMessageId !== null) {
-    run(`DELETE FROM prompt_message WHERE id = $id`, { id: ws.data.pendingUserMessageId })
+    run(`DELETE FROM messages WHERE id = $id`, { id: ws.data.pendingUserMessageId })
     ws.data.pendingUserMessageId = null
   }
 }
@@ -98,7 +98,7 @@ function conversationHistory(conversationId: string) {
   }>(
     // 除了 AI 对话，还有学生手改（edit）和粘贴外部 AI 代码（manual）的版本；引导对话（guidance）不算
     `SELECT id, role, source, content, code_html, code_css, code_js, submission_id, created
-     FROM prompt_message WHERE conversation_id = $id AND source IN ('conversation', 'edit', 'manual')
+     FROM messages WHERE conversation_id = $id AND source IN ('conversation', 'edit', 'manual')
      ORDER BY created, id`,
     { id: conversationId },
   )
@@ -230,7 +230,7 @@ export const websocket: WebSocketHandler<WsData> = {
     }
     send(ws, {
       type: "init",
-      conversation_id: uuidOut(d.conversationId),
+      conversation_id: d.conversationId,
       messages: conversationHistory(d.conversationId).map((m) => ({
         id: m.id,
         role: m.role,
@@ -239,7 +239,7 @@ export const websocket: WebSocketHandler<WsData> = {
         code:
           m.role === "assistant" ? { html: m.code_html, css: m.code_css, js: m.code_js } : null,
         submitted: m.role === "assistant" ? m.submission_id !== null : null,
-        created: iso(m.created),
+        created: m.created,
       })),
     })
   },
