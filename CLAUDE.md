@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WebPreview is a web-based tutorial/challenge platform where users view tutorials and submit HTML/CSS/JS code for challenges. It is a Bun workspaces monorepo: a Bun backend (`server/`, package `webpreview-server`) and a Vue 3 frontend (`client/`, package `webpreview-client`) share one root `package.json` and one `bun.lock`, deployed via Docker Compose with Caddy as reverse proxy.
 
-The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1–2 GB); in 2026-11 the Django-shaped schema was replaced by its own (`users`, `tasks`, `submissions`, …). A database still in the old Django layout is converted on startup by `src/migrate-django.ts` (one transaction, row counts and `foreign_key_check` verified, then `VACUUM`; `user_version` 0 → 1) — once production has been migrated, delete it along with its test (`tests/migrate.test.ts`, `tests/django-schema.sql`). Password hashes are still `pbkdf2_sha256$iterations$salt$hash` (the format Django used), so old passwords keep working. The Django code is in git history.
+The backend was rewritten from Django in 2026-10 to cut memory use (~25 MB vs. 1–2 GB); in 2026-11 the Django-shaped schema was replaced by its own (`users`, `tasks`, `submissions`, …). Production was migrated on 2026-11-26; the one-time converter (`src/migrate-django.ts`) lives in commit `d3203c6` — a database still in the old Django layout makes `openDb` throw, start that commit once to convert it. Password hashes are still `pbkdf2_sha256$iterations$salt$hash` (the format Django used), so old passwords keep working. The Django code is in git history.
 
 ## Architecture
 

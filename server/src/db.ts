@@ -2,7 +2,6 @@ import { Database } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
 import { config } from "./config"
-import { migrateFromDjango } from "./migrate-django"
 
 // 约定：时间是 UTC 的 ISO 字符串（toISOString，毫秒精度，按字符串比较即按时间比较），只用 now() 写；
 // 布尔是 0/1；提交和对话的 id 是标准 UUID 字符串。
@@ -178,9 +177,10 @@ export function openDb(path: string): Database {
 
   const version = db.query<{ user_version: number }, []>("PRAGMA user_version").get()!.user_version
   if (version === 0) {
-    // 旧的 Django 表结构：搬进新表（外键检查要在事务外关掉）
     const legacy = db.query(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'account_user'`).get()
-    if (legacy) migrateFromDjango(db, SCHEMA)
+    if (legacy) {
+      throw new Error("这是旧的 Django 表结构，请先用 d3203c6 版本启动一次（会自动迁移），再换回新代码")
+    }
     db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`)
   } else if (version > SCHEMA_VERSION) {
     throw new Error(`数据库版本 ${version} 比代码新（${SCHEMA_VERSION}），请更新代码`)
