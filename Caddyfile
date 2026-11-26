@@ -4,7 +4,7 @@
     handle_path /* {
         root * /usr/share/caddy
         file_server
-        try_files {path} /
+        try_files {path} /index.html
     }
 
     handle_path /media/* {
