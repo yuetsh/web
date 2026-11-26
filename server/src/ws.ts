@@ -134,7 +134,10 @@ async function handlePrompt(ws: WS, data: any) {
     let full: string
     try {
       const brief = challengeBrief(ws.data.taskId)
-      full = await streamToClient(ws, streamChat(history, model, ws.data.abort.signal, brief))
+      const game = get<{ task_type: string }>(`SELECT task_type FROM tasks WHERE id = $id`, {
+        id: ws.data.taskId,
+      })?.task_type === "game"
+      full = await streamToClient(ws, streamChat(history, model, ws.data.abort.signal, brief, game))
     } catch (e) {
       // 客户端自己断开导致的中止不算出错
       if (!ws.data.closed) send(ws, { type: "error", content: userFacingError(e) })

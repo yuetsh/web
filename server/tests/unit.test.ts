@@ -3,6 +3,7 @@ import { pyRound, pySum } from "../src/services/pyround"
 import {
   chatModel,
   extractCode,
+  gamePrompt,
   parseGuidanceResponse,
   streamChat,
   streamGuidance,
@@ -10,6 +11,8 @@ import {
   userFacingError,
 } from "../src/services/llm"
 import { config } from "../src/config"
+import { GAME_ASSET_LIST } from "../src/services/gameAssets"
+import { readFileSync } from "node:fs"
 import { checkPassword, makePassword } from "../src/auth"
 import { now, uuid } from "../src/db"
 import { toCsv } from "../src/services/gradebook"
@@ -176,4 +179,23 @@ test("userFacingError 不透出接口原始返回", () => {
   } finally {
     console.error = quiet
   }
+})
+
+describe("游戏提示词", () => {
+  test("拼进了素材清单", () => {
+    const p = gamePrompt()
+    expect(p).not.toContain("{{")
+    expect(p).toContain("player-green（")
+    expect(p).toContain("bg-forest（")
+  })
+
+  test("素材清单和 assets.json 一致（改了 assets.json 要运行 client/scripts/game-assets.ts）", () => {
+    const catalog = JSON.parse(readFileSync(`${import.meta.dir}/../../client/public/game/assets.json`, "utf8"))
+    const names = [
+      ...catalog.groups.flatMap((g: any) => g.sprites.map((s: any) => s.name)),
+      ...catalog.backgrounds.map((b: any) => b.name),
+    ]
+    const listed = [...GAME_ASSET_LIST.matchAll(/([a-z][a-z-]*)（/g)].map((m) => m[1])
+    expect(listed.sort()).toEqual(names.sort())
+  })
 })
